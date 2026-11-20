@@ -16,11 +16,9 @@
 namespace {
 constexpr quint64 kAppId = 1573360530175823882ULL;
 const QString kRefreshKey = QStringLiteral("discord/refreshToken");
-constexpr const char *kLargeImage = "evernight";
-constexpr const char *kButtonLabel = "Get Evernight";
-constexpr const char *kButtonUrl = "https://github.com/happilli/evernight";
-constexpr const char *kButton2Label = "Listen along";
-constexpr const char *kButton2Url =
+constexpr const char *kIconImage = "evernight";
+constexpr const char *kButtonLabel = "Listen along";
+constexpr const char *kButtonUrl =
     "https://www.youtube.com/watch?v=dz1MhkbPthI";
 
 void fetchCover(QObject *ctx, const QString &title, const QString &artist,
@@ -55,7 +53,6 @@ struct DiscordPresence::Impl {
   QTimer clearTimer;
   QTimer pump;
   QTimer debounce;
-  QString avatar, userName;
   struct {
     QString title, artist;
     qint64 start = 0, end = 0;
@@ -139,16 +136,7 @@ void DiscordPresence::ensureClient() {
           discordpp::Client::StatusToString(s).c_str(), int(e), detail);
     if (!self)
       return;
-    const bool ready = s == discordpp::Client::Status::Ready;
-    if (ready) {
-      if (auto u = self->d->client->GetCurrentUserV2()) {
-        self->d->avatar = QString::fromStdString(
-            u->AvatarUrl(discordpp::UserHandle::AvatarType::Png,
-                         discordpp::UserHandle::AvatarType::Png));
-        self->d->userName = QString::fromStdString(u->DisplayName());
-      }
-    }
-    self->setConnected(ready);
+    self->setConnected(s == discordpp::Client::Status::Ready);
   });
   d->client->SetTokenExpirationCallback([self] {
     if (self && self->m_enabled)
@@ -292,8 +280,7 @@ void DiscordPresence::flush() {
 
   auto client = d->client;
 
-  auto build = [p, avatar = d->avatar,
-                user = d->userName](const QString &image) {
+  auto build = [p](const QString &image) {
     discordpp::Activity a;
     a.SetType(discordpp::ActivityTypes::Listening);
     a.SetName("Evernight");
@@ -309,18 +296,10 @@ void DiscordPresence::flush() {
     a.SetTimestamps(ts);
 
     discordpp::ActivityAssets assets;
-    bool hasAssets = false;
-    if (!image.isEmpty()) {
+    if (!image.isEmpty())
       assets.SetLargeImage(image.toStdString());
-      hasAssets = true;
-    }
-    if (!avatar.isEmpty()) {
-      assets.SetSmallImage(avatar.toStdString());
-      assets.SetSmallText(user.toStdString());
-      hasAssets = true;
-    }
-    if (hasAssets)
-      a.SetAssets(assets);
+    assets.SetSmallImage(kIconImage);
+    a.SetAssets(assets);
 
     discordpp::ActivityButton button;
     button.SetLabel(kButtonLabel);
@@ -344,7 +323,7 @@ void DiscordPresence::flush() {
         });
   };
 
-  const QString fallback = QString::fromLatin1(kLargeImage);
+  const QString fallback = QString::fromLatin1(kIconImage);
 
   if (p.artist.isEmpty()) {
     send(fallback);
