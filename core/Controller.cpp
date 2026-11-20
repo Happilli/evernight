@@ -1,0 +1,710 @@
+#include "./Controller.h"
+#include "./Store.h"
+#include <QGuiApplication>
+#include <QHash>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QRandomGenerator>
+#include <QSettings>
+#include <QThread>
+#include <QTimer>
+#include <QtGlobal>
+
+#ifdef Q_OS_ANDROID
+#include <QDir>
+#include <QFile>
+#include <QJniEnvironment>
+#include <QJniObject>
+#include <QPointer>
+#include <QStandardPaths>
+#endif
+
+namespace {
+
+QString fold(const QString &s) {
+  const QString n = s.normalized(QString::NormalizationForm_D).toLower();
+  QString out;
+  out.reserve(n.size());
+  bool space = true;
+  for (QChar c : n) {
+    if (c.category() == QChar::Mark_NonSpacing)
+      continue;
+    if (c.isLetterOrNumber()) {
+      out += c;
+      space = false;
+    } else if (!space) {
+      out += QLatin1Char(' ');
+      space = true;
+    }
+  }
+  return out.trimmed();
+}
+
+int editDistance(QStringView a, QStringView b, int maxD) {
+  if (qAbs(a.size() - b.size()) > maxD)
+    return maxD + 1;
+  QList<int> prev(b.size() + 1), cur(b.size() + 1);
+  for (int j = 0; j <= b.size(); ++j)
+    prev[j] = j;
+  for (int i = 1; i <= a.size(); ++i) {
+    cur[0] = i;
+    int rowMin = cur[0];
+    for (int j = 1; j <= b.size(); ++j) {
+      const int v = qMin(qMin(prev[j] + 1, cur[j - 1] + 1),
+                         prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+      cur[j] = v;
+      rowMin = qMin(rowMin, v);
+    }
+    if (rowMin > maxD)
+      return maxD + 1;
+    std::swap(prev, cur);
+  }
+  return prev[b.size()];
+}
+
+int tokenScore(const QString &tok, const QStringList &words) {
+  int best = 0;
+  const int maxD = tok.size() >= 7 ? 2 : 1;
+  for (const QString &w : words) {
+    int s = 0;
+    if (w == tok)
+      s = 100;
+    else if (w.startsWith(tok))
+      s = 80 - qMin(10, int(w.size() - tok.size()));
+    else if (tok.size() >= 2 && w.contains(tok))
+      s = 40;
+    else if (tok.size() >= 4 &&
+             editDistance(QStringView(w).left(tok.size()), tok, maxD) <= maxD)
+      s = 30 - 5 * editDistance(QStringView(w).left(tok.size()), tok, maxD);
+    best = qMax(best, s);
+  }
+  return best;
+}
+
+#ifdef Q_OS_ANDROID
+
+constexpr int kSdkNotifications = 33;
+constexpr int kThumbSize = 128;
+constexpr qint64 kSeekJumpMs = 1500;
+
+enum Command { CmdPlay, CmdPause, CmdNext, CmdPrev, CmdSeek };
+
+QPointer<Controller> g_ctl;
+
+QJniObject appContext() {
+  return QNativeInterface::QAndroidApplication::context();
+}
+
+int sdkVersion() { return QNativeInterface::QAndroidApplication::sdkVersion(); }
+
+jobjectArray stringArray(QJniEnvironment &env, const QStringList &items) {
+  jobjectArray arr = env->NewObjectArray(
+      items.size(), env->FindClass("java/lang/String"), nullptr);
+  for (int i = 0; i < items.size(); ++i)
+    env->SetObjectArrayElement(
+        arr, i, QJniObject::fromString(items[i]).object<jstring>());
+  return arr;
+}
+
+void updateService(const QString &title, const QString &artist,
+                   const QString &thumb, qint64 duration, qint64 position,
+                   bool playing) {
+  QJniObject ctx = appContext();
+  if (!ctx.isValid())
+    return;
+  QJniEnvironment env;
+  QJniObject::callStaticMethod<void>(
+      "com/safalski/evernight/PlaybackService", "update",
+      "(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;"
+      "Ljava/lang/String;JJZ)V",
+      ctx.object(), QJniObject::fromString(title).object<jstring>(),
+      QJniObject::fromString(artist).object<jstring>(),
+      QJniObject::fromString(thumb).object<jstring>(), jlong(duration),
+      jlong(position), jboolean(playing));
+  env.checkAndClearExceptions();
+}
+
+void onCommand(JNIEnv *, jclass, jint cmd, jlong arg) {
+  QMetaObject::invokeMethod(
+      qGuiApp,
+      [cmd, arg] {
+        Controller *c = g_ctl;
+        if (!c)
+          return;
+        switch (cmd) {
+        case CmdPlay:
+          if (!c->playing())
+            c->toggle();
+          break;
+        case CmdPause:
+          if (c->playing())
+            c->toggle();
+          break;
+        case CmdNext:
+          c->next();
+          break;
+        case CmdPrev:
+          c->prev();
+          break;
+        case CmdSeek:
+          c->player()->setPosition(arg);
+          break;
+        default:
+          break;
+        }
+      },
+      Qt::QueuedConnection);
+}
+
+void registerNatives() {
+  static const JNINativeMethod methods[] = {
+      {"nativeCommand", "(IJ)V", reinterpret_cast<void *>(onCommand)}};
+  QJniEnvironment env;
+  if (!env.registerNativeMethods("com/safalski/evernight/PlaybackService",
+                                 methods,
+                                 int(sizeof(methods) / sizeof(methods[0]))))
+    qWarning("PlaybackService natives were not registered");
+}
+
+QString audioPermission() {
+  return sdkVersion() >= kSdkNotifications
+             ? QStringLiteral("android.permission.READ_MEDIA_AUDIO")
+             : QStringLiteral("android.permission.READ_EXTERNAL_STORAGE");
+}
+
+QString notificationPermission() {
+  return QStringLiteral("android.permission.POST_NOTIFICATIONS");
+}
+
+bool hasPermission(const QString &name) {
+  return appContext().callMethod<jint>(
+             "checkSelfPermission", "(Ljava/lang/String;)I",
+             QJniObject::fromString(name).object<jstring>()) == 0;
+}
+
+QStringList missingPermissions() {
+  QStringList missing;
+  if (!hasPermission(audioPermission()))
+    missing << audioPermission();
+  if (sdkVersion() >= kSdkNotifications &&
+      !hasPermission(notificationPermission()))
+    missing << notificationPermission();
+  return missing;
+}
+
+void requestPermissions(const QStringList &names) {
+  if (names.isEmpty())
+    return;
+  QNativeInterface::QAndroidApplication::runOnAndroidMainThread([names] {
+    QJniEnvironment env;
+    jobjectArray arr = stringArray(env, names);
+    appContext().callMethod<void>("requestPermissions",
+                                  "([Ljava/lang/String;I)V", arr, 1);
+    env.checkAndClearExceptions();
+  });
+}
+
+QString thumbFor(const QJniObject &ctx, qint64 id) {
+  const QString dir =
+      QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
+      QStringLiteral("/thumbs");
+  const QString path =
+      dir + QLatin1Char('/') + QString::number(id) + QStringLiteral(".jpg");
+  if (QFile::exists(path))
+    return path;
+  QDir().mkpath(dir);
+
+  QJniEnvironment env;
+  QJniObject base = QJniObject::getStaticObjectField(
+      "android/provider/MediaStore$Audio$Media", "EXTERNAL_CONTENT_URI",
+      "Landroid/net/Uri;");
+  QJniObject uri = QJniObject::callStaticObjectMethod(
+      "android/content/ContentUris", "withAppendedId",
+      "(Landroid/net/Uri;J)Landroid/net/Uri;", base.object(), jlong(id));
+  QJniObject size("android/util/Size", "(II)V", kThumbSize, kThumbSize);
+  QJniObject resolver = ctx.callObjectMethod(
+      "getContentResolver", "()Landroid/content/ContentResolver;");
+  QJniObject bitmap = resolver.callObjectMethod(
+      "loadThumbnail",
+      "(Landroid/net/Uri;Landroid/util/Size;Landroid/os/CancellationSignal;)"
+      "Landroid/graphics/Bitmap;",
+      uri.object(), size.object(), jobject(nullptr));
+  if (env.checkAndClearExceptions() || !bitmap.isValid())
+    return {};
+
+  QJniObject format = QJniObject::getStaticObjectField(
+      "android/graphics/Bitmap$CompressFormat", "JPEG",
+      "Landroid/graphics/Bitmap$CompressFormat;");
+  QJniObject out("java/io/FileOutputStream", "(Ljava/lang/String;)V",
+                 QJniObject::fromString(path).object<jstring>());
+  if (env.checkAndClearExceptions() || !out.isValid())
+    return {};
+  bitmap.callMethod<jboolean>("compress",
+                              "(Landroid/graphics/Bitmap$CompressFormat;I"
+                              "Ljava/io/OutputStream;)Z",
+                              format.object(), jint(85), out.object());
+  out.callMethod<void>("close", "()V");
+  if (env.checkAndClearExceptions())
+    return {};
+  return path;
+}
+
+struct Row {
+  QUrl url;
+  QString title;
+  QString artist;
+  QString thumb;
+};
+
+QList<Row> queryMusicFolder() {
+  QList<Row> rows;
+  QJniEnvironment env;
+  QJniObject ctx = appContext();
+  QJniObject resolver = ctx.callObjectMethod(
+      "getContentResolver", "()Landroid/content/ContentResolver;");
+  QJniObject base = QJniObject::getStaticObjectField(
+      "android/provider/MediaStore$Audio$Media", "EXTERNAL_CONTENT_URI",
+      "Landroid/net/Uri;");
+  jobjectArray projection =
+      stringArray(env, {QStringLiteral("_id"), QStringLiteral("title"),
+                        QStringLiteral("artist")});
+  QJniObject cursor = resolver.callObjectMethod(
+      "query",
+      "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/"
+      "String;Ljava/lang/String;)Landroid/database/Cursor;",
+      base.object(), projection,
+      QJniObject::fromString("is_music != 0 AND relative_path LIKE 'Music/%'")
+          .object<jstring>(),
+      jobjectArray(nullptr),
+      QJniObject::fromString("title COLLATE NOCASE ASC").object<jstring>());
+  if (env.checkAndClearExceptions() || !cursor.isValid())
+    return rows;
+
+  while (cursor.callMethod<jboolean>("moveToNext", "()Z")) {
+    const qint64 id = cursor.callMethod<jlong>("getLong", "(I)J", 0);
+    const QString title =
+        cursor.callObjectMethod("getString", "(I)Ljava/lang/String;", 1)
+            .toString();
+    QString artist =
+        cursor.callObjectMethod("getString", "(I)Ljava/lang/String;", 2)
+            .toString();
+    if (artist == QStringLiteral("<unknown>"))
+      artist.clear();
+    rows.append({QUrl(QStringLiteral("content://media/external/audio/media/") +
+                      QString::number(id)),
+                 title, artist, thumbFor(ctx, id)});
+  }
+  cursor.callMethod<void>("close", "()V");
+  env.checkAndClearExceptions();
+  return rows;
+}
+
+#endif
+
+} // namespace
+
+Controller::Controller(QObject *parent) : QObject(parent) {
+  m_player.attach(m_spectrum.output());
+
+  connect(&m_player, &Player::positionChanged, this,
+          [this] { m_spectrum.setPosition(m_player.position()); });
+  connect(&m_player, &Player::metaDataChanged, this,
+          [this] { m_info.setMetaData(m_player.metaData()); });
+  connect(&m_player, &Player::stateChanged, this, [this] {
+    m_spectrum.setActive(playing());
+    emit playingChanged();
+  });
+  connect(&m_player, &Player::ended, this, &Controller::onEnded);
+  connect(&m_player, &Player::statusChanged, this, [this] {
+    if (m_pendingSeek < 0)
+      return;
+    const int s = m_player.status();
+    if (s != QMediaPlayer::LoadedMedia && s != QMediaPlayer::BufferedMedia)
+      return;
+    m_player.setPosition(m_pendingSeek);
+    m_pendingSeek = -1;
+  });
+  connect(&m_player, &Player::positionChanged, this, [this] {
+    if (m_pendingSeek >= 0)
+      return;
+    if (qAbs(m_player.position() - m_savedPos) >= 5000)
+      saveState();
+  });
+  connect(qGuiApp, &QGuiApplication::applicationStateChanged, this,
+          [this](Qt::ApplicationState state) {
+            if (state != Qt::ApplicationActive)
+              saveState();
+          });
+
+  connect(this, &Controller::playingChanged, this, &Controller::syncDiscord);
+  connect(this, &Controller::currentChanged, this, &Controller::syncDiscord);
+  connect(&m_info, &MediaInfo::changed, this, &Controller::syncDiscord);
+  connect(&m_player, &Player::durationChanged, this, &Controller::syncDiscord);
+  connect(&m_player, &Player::positionChanged, this,
+          [this, last = qint64(0)]() mutable {
+            const qint64 p = m_player.position();
+            if (qAbs(p - last) > 1500)
+              syncDiscord();
+            last = p;
+          });
+  connect(this, &Controller::tracksChanged, this,
+          [this] { m_normDirty = true; });
+  QTimer::singleShot(0, this, [this] {
+    m_discord.setEnabled(QSettings().value("discord", false).toBool());
+  });
+
+#ifdef Q_OS_ANDROID
+  g_ctl = this;
+  registerNatives();
+
+  auto push = [this] {
+    if (m_current < 0 || m_current >= m_tracks.size())
+      return;
+    const Track &t = m_tracks[m_current];
+    updateService(m_info.title().isEmpty() ? t.title : m_info.title(),
+                  m_info.artist().isEmpty() ? t.artist : m_info.artist(),
+                  t.thumb, m_player.duration(), m_player.position(), playing());
+  };
+  connect(&m_player, &Player::durationChanged, this, push);
+  connect(&m_player, &Player::metaDataChanged, this, push);
+  connect(&m_player, &Player::stateChanged, this, push);
+  connect(this, &Controller::currentChanged, this, push);
+  connect(&m_player, &Player::positionChanged, this,
+          [this, push, last = qint64(0)]() mutable {
+            const qint64 p = m_player.position();
+            if (qAbs(p - last) > kSeekJumpMs)
+              push();
+            last = p;
+          });
+  connect(qGuiApp, &QGuiApplication::applicationStateChanged, this,
+          [this](Qt::ApplicationState state) {
+            if (!m_awaitingPermission || state != Qt::ApplicationActive)
+              return;
+            if (!hasPermission(audioPermission()))
+              return;
+            m_awaitingPermission = false;
+            importLibrary();
+          });
+#endif
+
+  loadCache();
+  restoreState();
+  QTimer::singleShot(0, this, &Controller::scanLibrary);
+}
+
+void Controller::syncDiscord() {
+  if (m_current < 0 || m_current >= m_tracks.size()) {
+    m_discord.clear();
+    return;
+  }
+  const Track &t = m_tracks[m_current];
+  m_discord.update(m_info.title().isEmpty() ? t.title : m_info.title(),
+                   m_info.artist().isEmpty() ? t.artist : m_info.artist(),
+                   m_player.duration(), m_player.position(), playing());
+}
+void Controller::loadCache() {
+  for (const QJsonValue &v : Store::readLibrary()) {
+    const QJsonObject o = v.toObject();
+    m_tracks.append({QUrl(o["url"].toString()), o["title"].toString(),
+                     o["artist"].toString(), o["thumb"].toString()});
+  }
+  if (!m_tracks.isEmpty())
+    emit tracksChanged();
+}
+
+void Controller::saveCache() const {
+  QJsonArray arr;
+  for (const Track &t : m_tracks)
+    arr.append(QJsonObject{{"url", t.url.toString()},
+                           {"title", t.title},
+                           {"artist", t.artist},
+                           {"thumb", t.thumb}});
+  Store::writeLibrary(arr);
+}
+
+void Controller::restoreState() {
+  const QString url = Store::readLastUrl();
+  if (url.isEmpty())
+    return;
+  for (int i = 0; i < m_tracks.size(); ++i) {
+    if (m_tracks[i].url.toString() != url)
+      continue;
+    const qint64 pos = Store::readLastPosition();
+    m_pendingSeek = pos > 0 ? pos : -1;
+    if (!m_player.open(m_tracks[i].url)) {
+      m_pendingSeek = -1;
+      return;
+    }
+    m_current = i;
+    m_savedPos = pos;
+    emit currentChanged();
+    return;
+  }
+}
+
+void Controller::saveState(bool fromStart) {
+  if (m_current < 0 || m_current >= m_tracks.size())
+    return;
+  qint64 pos = fromStart ? 0 : m_player.position();
+  if (m_pendingSeek >= 0)
+    pos = m_pendingSeek;
+  m_savedPos = pos;
+  Store::writePlayback(m_tracks[m_current].url.toString(), pos);
+}
+
+QVariantList Controller::tracks() const {
+  QVariantList list;
+  list.reserve(m_tracks.size());
+  for (const Track &t : m_tracks)
+    list.append(QVariantMap{{QStringLiteral("uri"), t.url.toString()},
+                            {QStringLiteral("title"), t.title},
+                            {QStringLiteral("artist"), t.artist},
+                            {QStringLiteral("thumb"), t.thumb}});
+  return list;
+}
+
+void Controller::setShuffle(bool value) {
+  if (m_shuffle == value)
+    return;
+  m_shuffle = value;
+  emit shuffleChanged();
+}
+
+void Controller::setRepeatMode(int value) {
+  if (m_repeatMode == value)
+    return;
+  m_repeatMode = value;
+  emit repeatModeChanged();
+}
+
+void Controller::setAutoNext(bool value) {
+  if (m_autoNext == value)
+    return;
+  m_autoNext = value;
+  emit autoNextChanged();
+}
+
+int Controller::queueSize() const {
+  return m_queue.isEmpty() ? m_tracks.size() : m_queue.size();
+}
+
+int Controller::queueAt(int pos) const {
+  return m_queue.isEmpty() ? pos : m_queue[pos];
+}
+
+int Controller::queuePos() const {
+  return m_queue.isEmpty() ? m_current : m_queue.indexOf(m_current);
+}
+
+void Controller::play(int index) {
+  if (index < 0 || index >= m_tracks.size())
+    return;
+  if (!m_player.open(m_tracks[index].url))
+    return;
+  m_pendingSeek = -1;
+  m_current = index;
+  emit currentChanged();
+  m_player.play();
+  saveState(true);
+}
+
+void Controller::playAt(int index) {
+  m_queue.clear();
+  play(index);
+}
+
+void Controller::playQueue(const QStringList &uris, int start) {
+  QHash<QString, int> byUrl;
+  byUrl.reserve(m_tracks.size());
+  for (int i = 0; i < m_tracks.size(); ++i)
+    byUrl.insert(m_tracks[i].url.toString(), i);
+
+  QList<int> queue;
+  int first = -1;
+  for (int i = 0; i < uris.size(); ++i) {
+    const auto it = byUrl.constFind(uris[i]);
+    if (it == byUrl.constEnd())
+      continue;
+    if (i == start)
+      first = queue.size();
+    queue.append(it.value());
+  }
+  if (queue.isEmpty())
+    return;
+  m_queue = queue;
+  play(queue[first >= 0 ? first : 0]);
+}
+
+void Controller::toggle() {
+  if (m_tracks.isEmpty())
+    return;
+  if (m_current < 0)
+    playAt(0);
+  else if (playing())
+    m_player.pause();
+  else
+    m_player.play();
+}
+
+void Controller::next() {
+  const int n = queueSize();
+  if (n == 0)
+    return;
+  const int pos = queuePos();
+  if (m_shuffle && n > 1) {
+    int r = pos;
+    while (r == pos)
+      r = QRandomGenerator::global()->bounded(n);
+    play(queueAt(r));
+  } else {
+    play(queueAt((pos + 1) % n));
+  }
+}
+
+void Controller::skipPrev() {
+  const int n = queueSize();
+  if (n == 0)
+    return;
+  const int pos = queuePos();
+  play(queueAt(pos < 0 ? 0 : (pos - 1 + n) % n));
+}
+
+void Controller::prev() {
+  const int n = queueSize();
+  if (n == 0)
+    return;
+  if (m_current < 0 || m_player.position() > 3000) {
+    m_player.setPosition(0);
+    return;
+  }
+  const int pos = queuePos();
+  play(queueAt(pos < 0 ? 0 : (pos - 1 + n) % n));
+}
+
+void Controller::onEnded() {
+  if (m_repeatMode == 2) {
+    m_player.setPosition(0);
+    m_player.play();
+    return;
+  }
+  if (!m_autoNext)
+    return;
+  if (!m_shuffle && m_repeatMode == 0 && queuePos() >= queueSize() - 1)
+    return;
+  next();
+}
+
+void Controller::importLibrary() {
+#ifdef Q_OS_ANDROID
+  if (m_scanning)
+    return;
+  m_scanning = true;
+  auto *thread = QThread::create([this] {
+    QList<Track> list;
+    for (const Row &r : queryMusicFolder())
+      list.append({r.url,
+                   r.title.isEmpty() ? QStringLiteral("Unknown") : r.title,
+                   r.artist, r.thumb});
+    QMetaObject::invokeMethod(
+        this,
+        [this, list] {
+          QUrl playingUrl;
+          if (m_current >= 0 && m_current < m_tracks.size())
+            playingUrl = m_tracks[m_current].url;
+
+          QStringList queueUrls;
+          for (int i : std::as_const(m_queue))
+            if (i >= 0 && i < m_tracks.size())
+              queueUrls << m_tracks[i].url.toString();
+
+          m_tracks = list;
+          m_current = -1;
+          QHash<QString, int> byUrl;
+          byUrl.reserve(m_tracks.size());
+          for (int i = 0; i < m_tracks.size(); ++i) {
+            byUrl.insert(m_tracks[i].url.toString(), i);
+            if (m_tracks[i].url == playingUrl)
+              m_current = i;
+          }
+
+          m_queue.clear();
+          for (const QString &u : std::as_const(queueUrls)) {
+            const auto it = byUrl.constFind(u);
+            if (it != byUrl.constEnd())
+              m_queue.append(it.value());
+          }
+
+          m_scanning = false;
+          emit tracksChanged();
+          emit currentChanged();
+          saveCache();
+        },
+        Qt::QueuedConnection);
+  });
+  connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+  thread->start();
+#endif
+}
+
+void Controller::scanLibrary() {
+#ifdef Q_OS_ANDROID
+  if (hasPermission(audioPermission()))
+    importLibrary();
+  else
+    m_awaitingPermission = true;
+  requestPermissions(missingPermissions());
+#endif
+}
+
+QVariantList Controller::search(const QString &query) {
+  if (m_normDirty) {
+    m_norm.clear();
+    m_norm.reserve(m_tracks.size());
+    for (const Track &t : std::as_const(m_tracks)) {
+      const QString ft = fold(t.title);
+      m_norm.append({ft.split(' ', Qt::SkipEmptyParts),
+                     fold(t.artist).split(' ', Qt::SkipEmptyParts), ft});
+    }
+    m_normDirty = false;
+  }
+  QVariantList out;
+  const QString q = fold(query);
+  if (q.isEmpty()) {
+    out.reserve(m_tracks.size());
+    for (int i = 0; i < m_tracks.size(); ++i)
+      out.append(i);
+    return out;
+  }
+  const QStringList toks = q.split(' ', Qt::SkipEmptyParts);
+  QList<QPair<int, int>> scored;
+  for (int i = 0; i < m_norm.size(); ++i) {
+    const Norm &n = m_norm[i];
+    int total = 0;
+    bool ok = true;
+    for (const QString &tok : toks) {
+      const int s =
+          qMax(3 * tokenScore(tok, n.title), 2 * tokenScore(tok, n.artist));
+      if (s == 0) {
+        ok = false;
+        break;
+      }
+      total += s;
+    }
+    if (!ok)
+      continue;
+    if (n.titleFull == q)
+      total += 200;
+    else if (n.titleFull.startsWith(q))
+      total += 80;
+    else if (n.titleFull.contains(q))
+      total += 40;
+    scored.append({total, i});
+  }
+  std::stable_sort(
+      scored.begin(), scored.end(),
+      [](const auto &a, const auto &b) { return a.first > b.first; });
+  out.reserve(scored.size());
+  for (const auto &p : scored)
+    out.append(p.second);
+  return out;
+}

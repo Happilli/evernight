@@ -1,0 +1,16 @@
+build/
+.cache/
+.gradle/
+*.user
+CMakeLists.txt.user*
+compile_commands.json
+.qtcreator/
+.idea/
+.vscode/
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+.qmlls.ini
+third_party/discord_social_sdk/

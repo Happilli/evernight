@@ -1,0 +1,125 @@
+#pragma once
+#include "../Core/sgitem.hpp"
+#include <QColor>
+#include <QFont>
+#include <QImage>
+#include <QMouseEvent>
+#include <QRectF>
+#include <QString>
+
+class QSGSimpleTextureNode;
+
+class MaterialCheckbox : public SgMaterialItem {
+  Q_OBJECT
+  QML_ELEMENT
+  Q_PROPERTY(bool checked READ checked WRITE setChecked NOTIFY checkedChanged)
+  Q_PROPERTY(CheckState checkState READ checkState WRITE setCheckState NOTIFY
+                 checkStateChanged)
+  Q_PROPERTY(bool error READ error WRITE setError NOTIFY errorChanged)
+  Q_PROPERTY(bool pressed READ pressed NOTIFY pressedChanged)
+  Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
+  Q_PROPERTY(QFont font READ font WRITE setFont NOTIFY fontChanged)
+  Q_PROPERTY(int fontWeight READ fontWeight WRITE setFontWeight NOTIFY
+                 fontWeightChanged)
+  Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
+  Q_PROPERTY(QColor uncheckedColor READ uncheckedColor WRITE setUncheckedColor
+                 NOTIFY uncheckedColorChanged)
+  Q_PROPERTY(QColor checkmarkColor READ checkmarkColor WRITE setCheckmarkColor
+                 NOTIFY checkmarkColorChanged)
+  Q_PROPERTY(QColor textColor READ textColor WRITE setTextColor NOTIFY
+                 textColorChanged)
+  Q_PROPERTY(QColor errorColor READ errorColor WRITE setErrorColor NOTIFY
+                 errorColorChanged)
+
+public:
+  enum CheckState { Unchecked, PartiallyChecked, Checked };
+  Q_ENUM(CheckState)
+
+  explicit MaterialCheckbox(QQuickItem *parent = nullptr);
+
+  bool checked() const { return m_state == Checked; }
+  CheckState checkState() const { return m_state; }
+  bool error() const { return m_error; }
+  bool pressed() const { return m_pressed; }
+  QString text() const { return m_text; }
+  QFont font() const { return m_font; }
+  int fontWeight() const { return m_fontWeight; }
+  QColor color() const { return m_color; }
+  QColor uncheckedColor() const { return m_uncheckedColor; }
+  QColor checkmarkColor() const { return m_checkmarkColor; }
+  QColor textColor() const { return m_textColor; }
+  QColor errorColor() const { return m_errorColor; }
+
+  void setChecked(bool v);
+  void setCheckState(CheckState v);
+  void setError(bool v);
+  void setText(const QString &v);
+  void setFont(const QFont &v);
+  void setFontWeight(int v);
+  void setColor(const QColor &v);
+  void setUncheckedColor(const QColor &v);
+  void setCheckmarkColor(const QColor &v);
+  void setTextColor(const QColor &v);
+  void setErrorColor(const QColor &v);
+
+signals:
+  void checkedChanged();
+  void checkStateChanged();
+  void errorChanged();
+  void pressedChanged();
+  void textChanged();
+  void fontChanged();
+  void fontWeightChanged();
+  void colorChanged();
+  void uncheckedColorChanged();
+  void checkmarkColorChanged();
+  void textColorChanged();
+  void errorColorChanged();
+  void toggled();
+  void clicked();
+
+protected:
+  void build(Kit::Mesh &m) override;
+  bool advance(qreal dt) override;
+  QSGNode *updatePaintNode(QSGNode *old, UpdatePaintNodeData *d) override;
+  void componentComplete() override;
+  void mousePressEvent(QMouseEvent *e) override;
+  void mouseReleaseEvent(QMouseEvent *e) override;
+  void mouseUngrabEvent() override;
+
+private:
+  struct Layer {
+    QImage img;
+    QRectF rect;
+    QString key;
+    QString shown;
+    bool on = false;
+  };
+
+  QFont labelFont() const;
+  qreal textWidth() const;
+  void updateImplicit();
+  void retarget(bool immediate = false);
+  void setPressed(bool v);
+  bool applyState(CheckState s, bool user);
+  void activate();
+  void syncLayer(QSGNode *root, QSGSimpleTextureNode *&node, Layer &l);
+
+  CheckState m_state = Unchecked;
+  bool m_error = false;
+  bool m_pressed = false;
+  QString m_text;
+  QFont m_font;
+  int m_fontWeight = 400;
+  QColor m_color = QColor("#6750A4");
+  QColor m_uncheckedColor = QColor("#49454F");
+  QColor m_checkmarkColor = QColor("#FFFFFF");
+  QColor m_textColor = QColor("#1D1B20");
+  QColor m_errorColor = QColor("#B3261E");
+  Spring m_fill;
+  Spring m_mark;
+  Spring m_dash;
+  Spring m_press;
+  Layer m_textLayer;
+  QSGSimpleTextureNode *m_textNode = nullptr;
+};
