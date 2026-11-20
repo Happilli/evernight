@@ -1,0 +1,95 @@
+#pragma once
+#include "../Core/sgitem.hpp"
+#include <QColor>
+#include <QMouseEvent>
+
+class MaterialSwitch : public SgMaterialItem {
+  Q_OBJECT
+  QML_ELEMENT
+  Q_PROPERTY(bool checked READ checked WRITE setChecked NOTIFY checkedChanged)
+  Q_PROPERTY(
+      bool showIcons READ showIcons WRITE setShowIcons NOTIFY showIconsChanged)
+  Q_PROPERTY(bool pressed READ pressed NOTIFY pressedChanged)
+  Q_PROPERTY(QColor trackColor READ trackColor WRITE setTrackColor NOTIFY
+                 trackColorChanged)
+  Q_PROPERTY(QColor checkedTrackColor READ checkedTrackColor WRITE
+                 setCheckedTrackColor NOTIFY checkedTrackColorChanged)
+  Q_PROPERTY(QColor handleColor READ handleColor WRITE setHandleColor NOTIFY
+                 handleColorChanged)
+  Q_PROPERTY(QColor checkedHandleColor READ checkedHandleColor WRITE
+                 setCheckedHandleColor NOTIFY checkedHandleColorChanged)
+  Q_PROPERTY(QColor borderColor READ borderColor WRITE setBorderColor NOTIFY
+                 borderColorChanged)
+  Q_PROPERTY(QColor iconColor READ iconColor WRITE setIconColor NOTIFY
+                 iconColorChanged)
+  Q_PROPERTY(QColor checkedIconColor READ checkedIconColor WRITE
+                 setCheckedIconColor NOTIFY checkedIconColorChanged)
+
+public:
+  explicit MaterialSwitch(QQuickItem *parent = nullptr);
+
+  bool checked() const { return m_checked; }
+  bool showIcons() const { return m_showIcons; }
+  bool pressed() const { return m_pressed; }
+  QColor trackColor() const { return m_trackColor; }
+  QColor checkedTrackColor() const { return m_checkedTrackColor; }
+  QColor handleColor() const { return m_handleColor; }
+  QColor checkedHandleColor() const { return m_checkedHandleColor; }
+  QColor borderColor() const { return m_borderColor; }
+  QColor iconColor() const { return m_iconColor; }
+  QColor checkedIconColor() const { return m_checkedIconColor; }
+
+  void setChecked(bool v);
+  void setShowIcons(bool v);
+  void setTrackColor(const QColor &v);
+  void setCheckedTrackColor(const QColor &v);
+  void setHandleColor(const QColor &v);
+  void setCheckedHandleColor(const QColor &v);
+  void setBorderColor(const QColor &v);
+  void setIconColor(const QColor &v);
+  void setCheckedIconColor(const QColor &v);
+
+signals:
+  void checkedChanged();
+  void showIconsChanged();
+  void pressedChanged();
+  void trackColorChanged();
+  void checkedTrackColorChanged();
+  void handleColorChanged();
+  void checkedHandleColorChanged();
+  void borderColorChanged();
+  void iconColorChanged();
+  void checkedIconColorChanged();
+  void toggled();
+  void clicked();
+
+protected:
+  void build(Kit::Mesh &m) override;
+  bool advance(qreal dt) override;
+  void componentComplete() override;
+  void mousePressEvent(QMouseEvent *e) override;
+  void mouseMoveEvent(QMouseEvent *e) override;
+  void mouseReleaseEvent(QMouseEvent *e) override;
+  void mouseUngrabEvent() override;
+
+private:
+  void setPressed(bool v);
+  void retarget(bool immediate = false);
+  void userSet(bool on);
+  bool overTrack(const QPointF &pt) const;
+
+  bool m_checked = false;
+  bool m_showIcons = false;
+  bool m_pressed = false;
+  bool m_dragging = false;
+  qreal m_pressX = 0.0;
+  QColor m_trackColor = QColor("#E6E0E9");
+  QColor m_checkedTrackColor = QColor("#6750A4");
+  QColor m_handleColor = QColor("#79747E");
+  QColor m_checkedHandleColor = QColor("#FFFFFF");
+  QColor m_borderColor = QColor("#79747E");
+  QColor m_iconColor = QColor("#E6E0E9");
+  QColor m_checkedIconColor = QColor("#6750A4");
+  Spring m_pos;
+  Spring m_press;
+};

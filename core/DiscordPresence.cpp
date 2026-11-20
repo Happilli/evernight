@@ -1,0 +1,381 @@
+#include "./DiscordPresence.h"
+#include <QDateTime>
+#include <QPointer>
+#include <QRegularExpression>
+#include <QSettings>
+#include <QTimer>
+#include <functional>
+#include <thread>
+#ifdef Q_OS_ANDROID
+#include <QCoreApplication>
+#include <QJniEnvironment>
+#include <QJniObject>
+#define DISCORDPP_IMPLEMENTATION
+#include <discordpp.h>
+#endif
+namespace {
+constexpr quint64 kAppId = 1573360530175823882ULL;
+const QString kRefreshKey = QStringLiteral("discord/refreshToken");
+constexpr const char *kLargeImage = "evernight";
+constexpr const char *kButtonLabel = "Get Evernight";
+constexpr const char *kButtonUrl = "https://github.com/happilli/evernight";
+constexpr const char *kButton2Label = "Listen along";
+constexpr const char *kButton2Url =
+    "https://www.youtube.com/watch?v=dz1MhkbPthI";
+
+void fetchCover(QObject *ctx, const QString &title, const QString &artist,
+                std::function<void(QString)> done) {
+#ifdef Q_OS_ANDROID
+  QString clean = title;
+  clean.remove(QRegularExpression(QStringLiteral("\\s*[\\(\\[].*?[\\)\\]]")));
+  const QString term = artist + QLatin1Char(' ') + clean.trimmed();
+  QPointer<QObject> guard(ctx);
+  std::thread([guard, term, done] {
+    QJniEnvironment env;
+    const QString art = QJniObject::callStaticMethod<jstring>(
+                            "com/safalski/evernight/CoverLookup", "find",
+                            "(Ljava/lang/String;)Ljava/lang/String;",
+                            QJniObject::fromString(term).object<jstring>())
+                            .toString();
+    if (!guard)
+      return;
+    QMetaObject::invokeMethod(
+        guard.data(), [done, art] { done(art); }, Qt::QueuedConnection);
+  }).detach();
+#else
+  Q_UNUSED(ctx)
+  Q_UNUSED(title)
+  Q_UNUSED(artist)
+  done({});
+#endif
+}
+} // namespace
+
+struct DiscordPresence::Impl {
+  QTimer clearTimer;
+  QTimer pump;
+  QTimer debounce;
+  QString avatar, userName;
+  struct {
+    QString title, artist;
+    qint64 start = 0, end = 0;
+    bool valid = false;
+  } pending;
+  QString sentKey;
+  qint64 sentStart = 0;
+  bool refreshing = false;
+  QHash<QString, QString> covers;
+#ifdef Q_OS_ANDROID
+  std::shared_ptr<discordpp::Client> client;
+#endif
+};
+
+DiscordPresence::DiscordPresence(QObject *parent)
+    : QObject(parent), d(std::make_unique<Impl>()) {
+  d->pump.setInterval(16);
+  d->debounce.setSingleShot(true);
+  d->debounce.setInterval(400);
+  connect(&d->debounce, &QTimer::timeout, this, &DiscordPresence::flush);
+  d->clearTimer.setSingleShot(true);
+  d->clearTimer.setInterval(2500);
+  connect(&d->clearTimer, &QTimer::timeout, this, &DiscordPresence::clear);
+#ifdef Q_OS_ANDROID
+  connect(&d->pump, &QTimer::timeout, this, [] { discordpp::RunCallbacks(); });
+#endif
+}
+
+DiscordPresence::~DiscordPresence() = default;
+
+bool DiscordPresence::hasToken() const {
+  return !QSettings().value(kRefreshKey).toString().isEmpty();
+}
+
+void DiscordPresence::setConnected(bool v) {
+  if (m_connected == v)
+    return;
+  m_connected = v;
+  emit connectedChanged();
+  if (v && d->pending.valid)
+    d->debounce.start();
+}
+
+void DiscordPresence::setEnabled(bool v) {
+  if (m_enabled == v)
+    return;
+  m_enabled = v;
+  emit enabledChanged();
+  if (v) {
+    resume();
+    return;
+  }
+  clear();
+#ifdef Q_OS_ANDROID
+  if (d->client)
+    d->client->Disconnect();
+#endif
+  setConnected(false);
+}
+
+void DiscordPresence::ensureClient() {
+#ifdef Q_OS_ANDROID
+  if (d->client)
+    return;
+  QJniObject activity = QNativeInterface::QAndroidApplication::context();
+  QJniObject::callStaticMethod<void>(
+      "com/discord/socialsdk/DiscordSocialSdkInit", "setEngineActivity",
+      "(Landroid/app/Activity;)V", activity.object());
+  d->client = std::make_shared<discordpp::Client>();
+  d->client->SetApplicationId(kAppId);
+  d->client->AddLogCallback(
+      [](std::string msg, discordpp::LoggingSeverity sev) {
+        qInfo("DiscordSDK[%d] %s", int(sev), msg.c_str());
+      },
+      discordpp::LoggingSeverity::Info);
+  QPointer<DiscordPresence> self(this);
+  d->client->SetStatusChangedCallback([self](discordpp::Client::Status s,
+                                             discordpp::Client::Error e,
+                                             int32_t detail) {
+    qInfo("Discord status=%s err=%d detail=%d",
+          discordpp::Client::StatusToString(s).c_str(), int(e), detail);
+    if (!self)
+      return;
+    const bool ready = s == discordpp::Client::Status::Ready;
+    if (ready) {
+      if (auto u = self->d->client->GetCurrentUserV2()) {
+        self->d->avatar = QString::fromStdString(
+            u->AvatarUrl(discordpp::UserHandle::AvatarType::Png,
+                         discordpp::UserHandle::AvatarType::Png));
+        self->d->userName = QString::fromStdString(u->DisplayName());
+      }
+    }
+    self->setConnected(ready);
+  });
+  d->client->SetTokenExpirationCallback([self] {
+    if (self && self->m_enabled)
+      self->resume();
+  });
+  d->pump.start();
+#endif
+}
+
+void DiscordPresence::login() {
+#ifdef Q_OS_ANDROID
+  ensureClient();
+  auto verifier = d->client->CreateAuthorizationCodeVerifier();
+  discordpp::AuthorizationArgs args;
+  args.SetClientId(kAppId);
+  args.SetScopes(discordpp::Client::GetDefaultPresenceScopes());
+  args.SetCodeChallenge(verifier.Challenge());
+  QPointer<DiscordPresence> self(this);
+  d->client->Authorize(args, [self, verifier](discordpp::ClientResult r,
+                                              std::string code,
+                                              std::string redirectUri) {
+    if (!self)
+      return;
+    if (!r.Successful()) {
+      const auto st = r.Status();
+      qWarning("Discord refresh failed: %s (status=%d)", r.Error().c_str(),
+               int(st));
+      if (st == discordpp::HttpStatusCode::BadRequest) {
+        QSettings().remove(kRefreshKey);
+        emit self->authRequired();
+      }
+      return;
+    }
+    self->d->client->GetToken(
+        kAppId, code, verifier.Verifier(), redirectUri,
+        [self](discordpp::ClientResult r, std::string access,
+               std::string refresh, discordpp::AuthorizationTokenType, int32_t,
+               std::string) {
+          if (!self)
+            return;
+          if (!r.Successful()) {
+            qWarning("Discord token exchange failed: %s", r.Error().c_str());
+            return;
+          }
+          self->adoptToken(QString::fromStdString(access),
+                           QString::fromStdString(refresh));
+        });
+  });
+#endif
+}
+void DiscordPresence::resume() {
+#ifdef Q_OS_ANDROID
+  const QString rt = QSettings().value(kRefreshKey).toString();
+  if (rt.isEmpty() || d->refreshing)
+    return;
+  d->refreshing = true;
+  ensureClient();
+  QPointer<DiscordPresence> self(this);
+  d->client->RefreshToken(
+      kAppId, rt.toStdString(),
+      [self](discordpp::ClientResult r, std::string access, std::string refresh,
+             discordpp::AuthorizationTokenType, int32_t, std::string) {
+        if (!self)
+          return;
+        self->d->refreshing = false;
+        if (!r.Successful()) {
+          const auto st = r.Status();
+          qWarning("Discord refresh failed: %s (status=%d)", r.Error().c_str(),
+                   int(st));
+          if (st == discordpp::HttpStatusCode::BadRequest ||
+              st == discordpp::HttpStatusCode::Unauthorized) {
+            QSettings().remove(kRefreshKey);
+            emit self->authRequired();
+          }
+          return;
+        }
+        self->adoptToken(QString::fromStdString(access),
+                         QString::fromStdString(refresh));
+      });
+#endif
+}
+void DiscordPresence::adoptToken(const QString &access,
+                                 const QString &refresh) {
+#ifdef Q_OS_ANDROID
+  if (!refresh.isEmpty())
+    QSettings().setValue(kRefreshKey, refresh);
+  QPointer<DiscordPresence> self(this);
+  d->client->UpdateToken(discordpp::AuthorizationTokenType::Bearer,
+                         access.toStdString(),
+                         [self](discordpp::ClientResult r) {
+                           qInfo("Discord UpdateToken: %s",
+                                 r.Successful() ? "ok" : r.Error().c_str());
+                           if (self && r.Successful())
+                             self->d->client->Connect();
+                         });
+#else
+  Q_UNUSED(access)
+  Q_UNUSED(refresh)
+#endif
+}
+
+void DiscordPresence::logout() {
+  clear();
+  QSettings().remove(kRefreshKey);
+#ifdef Q_OS_ANDROID
+  if (d->client)
+    d->client->Disconnect();
+#endif
+  setConnected(false);
+}
+
+void DiscordPresence::update(const QString &title, const QString &artist,
+                             qint64 durationMs, qint64 positionMs,
+                             bool playing) {
+  if (!m_enabled)
+    return;
+  if (!playing || title.size() < 2) {
+    d->debounce.stop();
+    d->pending.valid = false;
+    d->clearTimer.start();
+    return;
+  }
+  d->clearTimer.stop();
+  const qint64 start = QDateTime::currentMSecsSinceEpoch() - positionMs;
+  d->pending = {title, artist, start, durationMs > 0 ? start + durationMs : 0,
+                true};
+  d->debounce.start();
+}
+
+void DiscordPresence::flush() {
+  if (!d->pending.valid || !m_connected)
+    return;
+#ifdef Q_OS_ANDROID
+  const auto p = d->pending;
+  const QString key = p.title + QChar(0) + p.artist;
+  if (key == d->sentKey && qAbs(p.start - d->sentStart) < 2500)
+    return;
+  d->sentKey = key;
+  d->sentStart = p.start;
+  qInfo("Discord flush: %s - %s", qPrintable(p.title), qPrintable(p.artist));
+
+  auto client = d->client;
+
+  auto build = [p, avatar = d->avatar,
+                user = d->userName](const QString &image) {
+    discordpp::Activity a;
+    a.SetType(discordpp::ActivityTypes::Listening);
+    a.SetName("Evernight");
+    a.SetDetails(p.title.toStdString());
+    if (!p.artist.isEmpty()) {
+      a.SetState(p.artist.toStdString());
+      a.SetStatusDisplayType(discordpp::StatusDisplayTypes::State);
+    }
+    discordpp::ActivityTimestamps ts;
+    ts.SetStart(uint64_t(p.start));
+    if (p.end > 0)
+      ts.SetEnd(uint64_t(p.end));
+    a.SetTimestamps(ts);
+
+    discordpp::ActivityAssets assets;
+    bool hasAssets = false;
+    if (!image.isEmpty()) {
+      assets.SetLargeImage(image.toStdString());
+      hasAssets = true;
+    }
+    if (!avatar.isEmpty()) {
+      assets.SetSmallImage(avatar.toStdString());
+      assets.SetSmallText(user.toStdString());
+      hasAssets = true;
+    }
+    if (hasAssets)
+      a.SetAssets(assets);
+
+    discordpp::ActivityButton button;
+    button.SetLabel(kButtonLabel);
+    button.SetUrl(kButtonUrl);
+    a.AddButton(button);
+    return a;
+  };
+  auto send = [client, build](const QString &image) {
+    client->UpdateRichPresence(
+        build(image), [client, build](discordpp::ClientResult r) {
+          if (r.Successful()) {
+            qInfo("Discord presence sent");
+            return;
+          }
+          qWarning("Discord presence failed: %s, retrying without image",
+                   r.Error().c_str());
+          client->UpdateRichPresence(build({}), [](discordpp::ClientResult r2) {
+            if (!r2.Successful())
+              qWarning("Discord presence failed: %s", r2.Error().c_str());
+          });
+        });
+  };
+
+  const QString fallback = QString::fromLatin1(kLargeImage);
+
+  if (p.artist.isEmpty()) {
+    send(fallback);
+    return;
+  }
+
+  if (d->covers.contains(key)) {
+    send(d->covers.value(key));
+    return;
+  }
+
+  QPointer<DiscordPresence> self(this);
+  fetchCover(this, p.title, p.artist, [self, key, send, fallback](QString art) {
+    if (!self)
+      return;
+    const QString image = art.isEmpty() ? fallback : art;
+    qInfo("Discord cover: %s", qPrintable(image));
+    self->d->covers.insert(key, image);
+    if (self->d->sentKey == key)
+      send(image);
+  });
+#endif
+}
+
+void DiscordPresence::clear() {
+  d->clearTimer.stop();
+  d->debounce.stop();
+  d->pending.valid = false;
+  d->sentKey.clear();
+#ifdef Q_OS_ANDROID
+  if (d->client && m_connected)
+    d->client->ClearRichPresence();
+#endif
+}
