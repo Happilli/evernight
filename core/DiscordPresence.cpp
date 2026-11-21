@@ -17,6 +17,7 @@ namespace {
 constexpr quint64 kAppId = 1573360530175823882ULL;
 const QString kRefreshKey = QStringLiteral("discord/refreshToken");
 constexpr const char *kIconImage = "evernight";
+constexpr const char *kSmallImage = "https://i.imgur.com/9eebw9T.gif";
 constexpr const char *kButtonLabel = "Listen along";
 constexpr const char *kButtonUrl =
     "https://www.youtube.com/watch?v=dz1MhkbPthI";
@@ -298,7 +299,7 @@ void DiscordPresence::flush() {
     discordpp::ActivityAssets assets;
     if (!image.isEmpty())
       assets.SetLargeImage(image.toStdString());
-    assets.SetSmallImage(kIconImage);
+    assets.SetSmallImage(kSmallImage);
     a.SetAssets(assets);
 
     discordpp::ActivityButton button;
