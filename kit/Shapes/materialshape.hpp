@@ -199,6 +199,9 @@ private:
   qreal m_stiffness = 420.0;
   qreal m_damping = 0.6;
   bool m_morphing = false;
+  qreal imageSide() const;
+  int neededPx() const;
+  int m_scaledPx = 0;
 
   bool m_loading = false;
   bool m_loadAll = false;

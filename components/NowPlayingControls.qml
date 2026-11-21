@@ -7,6 +7,7 @@ Column {
 
     property real pw: 0
     signal queueRequested
+    signal skipRequested(int dir)
 
     function fmt(ms) {
         var s = Math.floor(Math.max(0, ms) / 1000);
@@ -113,7 +114,6 @@ Column {
     Row {
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 20
-
         MaterialIconButton {
             anchors.verticalCenter: parent.verticalCenter
             type: MaterialIconButton.Tonal
@@ -122,7 +122,7 @@ Column {
             color: Theme.secondaryContainer
             iconColor: Theme.onSecondaryContainerColor
             iconSource: "../icons/prev.svg"
-            onClicked: Controller.prev()
+            onClicked: root.skipRequested(1)
         }
 
         MaterialIconButton {
@@ -144,7 +144,7 @@ Column {
             color: Theme.secondaryContainer
             iconColor: Theme.onSecondaryContainerColor
             iconSource: "../icons/next.svg"
-            onClicked: Controller.next()
+            onClicked: root.skipRequested(-1)
         }
     }
 

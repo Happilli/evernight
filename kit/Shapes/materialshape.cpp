@@ -34,7 +34,6 @@ MaterialShape::MaterialShape(QQuickItem *parent) : QQuickPaintedItem(parent) {
   m_border = new MaterialShapeBorder(this);
   connect(m_border, &MaterialShapeBorder::widthChanged, this, [this] {
     m_pathDirty = true;
-    m_imageDirty = true;
     update();
   });
   connect(m_border, &MaterialShapeBorder::colorChanged, this,
@@ -365,19 +364,31 @@ void MaterialShape::setGlyphSize(qreal v) {
   emit glyphSizeChanged();
   update();
 }
+qreal MaterialShape::imageSide() const {
+  const qreal bw = m_border->width();
+  const qreal bleed = m_loading ? kLoadBleed : kImageBleed;
+  return std::min(width() - bw, height() - bw) * kFill * bleed *
+         (m_contained ? m_containedScale : 1.0);
+}
 
+int MaterialShape::neededPx() const {
+  const qreal dpr = window() ? window()->devicePixelRatio() : 1.0;
+  return qRound(imageSide() * dpr);
+}
 void MaterialShape::buildImage() {
   m_imageDirty = false;
   m_scaled = QImage();
+  m_scaledPx = 0;
   if (m_image.isNull())
     return;
 
   const qreal dpr = window() ? window()->devicePixelRatio() : 1.0;
+  const int cap = std::max(m_image.width(), m_image.height());
+  const int px = std::min(neededPx(), cap);
   const qreal bleed = m_loading ? kLoadBleed : kImageBleed;
   const qreal bw = m_border->width();
   const qreal side = std::min(width() - bw, height() - bw) * kFill * bleed *
                      (m_contained ? m_containedScale : 1.0);
-  const int px = qRound(side * dpr);
   if (px <= 0)
     return;
 
@@ -402,7 +413,6 @@ void MaterialShape::buildImage() {
   q.setRenderHint(QPainter::SmoothPixmapTransform, true);
   q.drawImage(dst, m_image, src);
   q.end();
-  out.setDevicePixelRatio(dpr);
   m_scaled = std::move(out);
 }
 
@@ -442,10 +452,8 @@ void MaterialShape::setSpringDamping(qreal v) {
 void MaterialShape::geometryChange(const QRectF &newGeometry,
                                    const QRectF &oldGeometry) {
   QQuickPaintedItem::geometryChange(newGeometry, oldGeometry);
-  if (newGeometry.size() != oldGeometry.size()) {
+  if (newGeometry.size() != oldGeometry.size())
     m_pathDirty = true;
-    m_imageDirty = true;
-  }
 }
 
 void MaterialShape::itemChange(ItemChange change, const ItemChangeData &data) {
@@ -514,21 +522,22 @@ void MaterialShape::paint(QPainter *p) {
   p->drawPath(m_path);
 
   if (!m_image.isNull()) {
-    if (m_imageDirty)
+    const int need = neededPx();
+    if (m_imageDirty || m_scaledPx <= 0 || need > m_scaledPx ||
+        need < m_scaledPx / 2)
       buildImage();
     if (!m_scaled.isNull()) {
-      const QSizeF sz = m_scaled.deviceIndependentSize();
+      const qreal side = imageSide();
       p->save();
       p->setClipPath(m_path);
       p->setRenderHint(QPainter::SmoothPixmapTransform, true);
       p->translate(width() / 2.0, height() / 2.0);
       if (m_loading)
         p->rotate(-rotation());
-      p->drawImage(QPointF(-sz.width() / 2.0, -sz.height() / 2.0), m_scaled);
+      p->drawImage(QRectF(-side / 2.0, -side / 2.0, side, side), m_scaled);
       p->restore();
     }
   }
-
   if (!m_glyph.isEmpty() && m_glyphSize > 0.0) {
     p->save();
     p->setClipPath(m_path);
