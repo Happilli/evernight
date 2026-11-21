@@ -107,6 +107,7 @@ public:
   Q_INVOKABLE void setChecked(int i, bool on);
 
 signals:
+  void trailingClicked(int index, const QVariant &item);
   void longPressed(int index, const QVariant &item);
   void modelChanged();
   void variantChanged();
