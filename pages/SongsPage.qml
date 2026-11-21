@@ -4,12 +4,21 @@ import Evernight
 
 FadePage {
     id: page
-
     property string query: ""
+    property var matches: []
 
-    readonly property var matches: {
-        Controller.tracks;
-        return Controller.search(page.query);
+    function refresh() {
+        matches = Controller.search(query);
+    }
+
+    onQueryChanged: refresh()
+    Component.onCompleted: refresh()
+
+    Connections {
+        target: Controller
+        function onTracksChanged() {
+            page.refresh();
+        }
     }
     readonly property int shownCurrent: Controller.current >= 0 ? page.matches.indexOf(Controller.current) : -1
 
