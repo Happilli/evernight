@@ -64,13 +64,16 @@ public class PlaybackService extends Service {
         }
     }
 
+    private static Runnable deferred;
+
     public static void update(Context context, String t, String a, String th,
                               long d, long p, boolean pl) {
         final Context app = context.getApplicationContext();
         final String newTitle = t == null ? "" : t;
         final String newArtist = a == null ? "" : a;
         final String newThumb = th == null ? "" : th;
-        MAIN.post(() -> {
+        final Runnable apply = () -> {
+            deferred = null;
             title = newTitle;
             artist = newArtist;
             thumb = newThumb;
@@ -85,6 +88,18 @@ public class PlaybackService extends Service {
                 } catch (RuntimeException e) {
                     Log.w(TAG, "startForegroundService failed", e);
                 }
+            }
+        };
+        MAIN.post(() -> {
+            if (deferred != null) {
+                MAIN.removeCallbacks(deferred);
+                deferred = null;
+            }
+            if (!pl && playing) {
+                deferred = apply;
+                MAIN.postDelayed(apply, 1500);
+            } else {
+                apply.run();
             }
         });
     }

@@ -3,9 +3,6 @@
 #include <QQmlApplicationEngine>
 
 int main(int argc, char *argv[]) {
-// #ifdef Q_OS_ANDROID
-//   qputenv("QT_MEDIA_BACKEND", "android");
-// #endif
   QGuiApplication app(argc, argv);
   app.setOrganizationName("safalski");
   app.setApplicationName("Evernight");

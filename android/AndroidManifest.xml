@@ -26,6 +26,7 @@
         android:name="org.qtproject.qt.android.bindings.QtApplication"
         android:hardwareAccelerated="true"
         android:label="-- %%INSERT_APP_NAME%% --"
+        android:allowAudioPlaybackCapture="true"
         android:icon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="true">
 
