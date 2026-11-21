@@ -495,6 +495,17 @@ void MaterialList::mouseReleaseEvent(QMouseEvent *e) {
   animate();
   const bool inside = rowAt(e->position()) == pressed;
   update();
+  if (inside && !m_items[pressed].trailingIcon.isEmpty() &&
+      e->position().x() >= width() - kPad - kIcon - 12.0) {
+    QMetaObject::invokeMethod(
+        this,
+        [this, pressed] {
+          emit trailingClicked(pressed, m_raw.value(pressed));
+        },
+        Qt::QueuedConnection);
+    e->accept();
+    return;
+  }
   if (inside) {
     m_flashIndex = pressed;
     QTimer::singleShot(120, this, [this] {
@@ -505,7 +516,6 @@ void MaterialList::mouseReleaseEvent(QMouseEvent *e) {
   }
   e->accept();
 }
-
 void MaterialList::mouseUngrabEvent() {
   m_holdTimer.stop();
   m_held = false;

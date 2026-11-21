@@ -4,14 +4,17 @@ import Evernight
 
 FadePage {
     id: page
+
     property var matches: []
     property var recent: []
     property bool fromCarousel: false
+
     signal songLongPressed(string uri, string title, string artist, string playlistId)
+    signal songInfoRequested(string uri, string title, string artist)
+
     function refresh() {
         matches = Controller.search("");
     }
-
     function refreshRecent() {
         recent = Controller.recent;
     }
@@ -39,6 +42,7 @@ FadePage {
     function handleBack() {
         return false;
     }
+
     Item {
         id: pinned
         anchors.top: parent.top
@@ -53,7 +57,6 @@ FadePage {
         MaterialCarousel {
             id: carousel
             property bool swiped: false
-
             anchors.fill: parent
             type: MaterialCarousel.Hero
             snap: true
@@ -75,14 +78,12 @@ FadePage {
                     };
                 });
             }
-
             onDraggingChanged: {
                 if (dragging)
                     swiped = true;
             }
             onCurrentIndexChanged: if (swiped)
                 settle.restart()
-
             onClicked: (index, item) => {
                 settle.stop();
                 swiped = false;
@@ -141,6 +142,7 @@ FadePage {
                 textColor: Theme.onSurfaceColor
                 selectedTextColor: Theme.onSurfaceColor
                 supportingColor: Theme.onSurfaceVariantColor
+                iconColor: Theme.onSurfaceVariantColor
                 avatarColor: Theme.secondaryContainer
                 avatarTextColor: Theme.onSurfaceColor
                 dividerColor: Theme.outlineVariant
@@ -154,7 +156,8 @@ FadePage {
                             headline: t[i].title,
                             supporting: t[i].artist,
                             image: t[i].thumb,
-                            avatarText: "\u266A"
+                            avatarText: "\u266A",
+                            trailingIcon: "\u24D8"
                         };
                     });
                 }
@@ -163,6 +166,10 @@ FadePage {
                 onLongPressed: (index, item) => {
                     const t = Controller.tracks[page.matches[index]];
                     page.songLongPressed(t.uri, t.title, t.artist, "");
+                }
+                onTrailingClicked: (index, item) => {
+                    const t = Controller.tracks[page.matches[index]];
+                    page.songInfoRequested(t.uri, t.title, t.artist);
                 }
             }
 
@@ -181,7 +188,6 @@ FadePage {
                         color: Theme.onSurfaceColor
                         font.pixelSize: 18
                     }
-
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "Put music in your Music folder"
