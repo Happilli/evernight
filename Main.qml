@@ -82,6 +82,7 @@ Window {
             PlaylistsPage {
                 id: playlistsPage
                 onOpenRequested: playlistId => root.detailId = playlistId
+                onCreateRequested: playlistSheet.openCreate()
             }
             Loader {
                 width: ListView.view ? ListView.view.width : 0

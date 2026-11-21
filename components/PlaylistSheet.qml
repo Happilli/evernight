@@ -11,6 +11,15 @@ Item {
     property string error: ""
     readonly property bool opened: sheet.open
 
+    function openCreate() {
+        playlistId = "";
+        playlistName = "";
+        mode = "create";
+        field.text = "";
+        error = "";
+        sheet.open = true;
+    }
+
     function openRename(id, name) {
         playlistId = id;
         playlistName = name;
@@ -52,7 +61,8 @@ Item {
             error = "Enter a name";
             return;
         }
-        if (!Playlists.rename(playlistId, n)) {
+        const ok = mode === "create" ? Playlists.create(n) : Playlists.rename(playlistId, n);
+        if (!ok) {
             error = "That name is already used";
             return;
         }
@@ -77,7 +87,7 @@ Item {
             spacing: 20
 
             Text {
-                text: root.mode === "rename" ? "Rename playlist" : "Delete playlist?"
+                text: root.mode === "create" ? "New playlist" : root.mode === "rename" ? "Rename playlist" : "Delete playlist?"
                 color: Theme.onSurfaceColor
                 font.pixelSize: 24
                 font.weight: Font.Medium
@@ -123,7 +133,7 @@ Item {
                 }
 
                 MaterialButton {
-                    label: root.mode === "rename" ? "Save" : "Delete"
+                    label: root.mode === "delete" ? "Delete" : root.mode === "create" ? "Create" : "Save"
                     type: MaterialButton.Filled
                     color: Theme.primary
                     contentColor: Theme.onPrimaryColor

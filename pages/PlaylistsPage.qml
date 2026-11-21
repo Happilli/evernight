@@ -1,46 +1,15 @@
 pragma ComponentBehavior: Bound
-
 import QtQuick
 import Evernight.Shapes
-import Evernight.Extraa
 import Evernight
 
 FadePage {
     id: page
 
     signal openRequested(string playlistId)
-
-    property string error: ""
-
-    function openCreate() {
-        field.text = "";
-        error = "";
-        sheet.open = true;
-    }
-
-    function closeSheet() {
-        field.blur();
-        sheet.open = false;
-    }
-
-    function submit() {
-        const n = field.text.trim();
-        if (n === "") {
-            error = "Enter a name";
-            return;
-        }
-        if (!Playlists.create(n)) {
-            error = "That name is already used";
-            return;
-        }
-        closeSheet();
-    }
+    signal createRequested
 
     function handleBack() {
-        if (sheet.open) {
-            closeSheet();
-            return true;
-        }
         return false;
     }
 
@@ -49,8 +18,6 @@ FadePage {
         flickableDirection: Flickable.VerticalFlick
         onDraggingVerticallyChanged: {
             page.ListView.view.interactive = !draggingVertically;
-            if (draggingVertically)
-                field.blur();
         }
         anchors.fill: parent
         anchors.topMargin: 12
@@ -109,7 +76,7 @@ FadePage {
                 MouseArea {
                     id: addArea
                     anchors.fill: parent
-                    onClicked: page.openCreate()
+                    onClicked: page.createRequested()
                 }
             }
 
@@ -176,71 +143,6 @@ FadePage {
                         anchors.fill: parent
                         onClicked: page.openRequested(card.modelData.id)
                     }
-                }
-            }
-        }
-    }
-
-    MaterialSheet {
-        id: sheet
-        anchors.fill: parent
-        z: 10
-        edge: MaterialSheet.FromTop
-        extent: 300
-        springStiffness: 320
-        springDamping: 0.48
-        color: Theme.surfaceContainerHigh
-        scrimColor: Theme.scrim
-        onDismissed: field.blur()
-
-        Column {
-            x: 24
-            y: 28
-            width: parent.width - 48
-            spacing: 20
-
-            Text {
-                text: "New playlist"
-                color: Theme.onSurfaceColor
-                font.pixelSize: 24
-                font.weight: Font.Medium
-            }
-
-            MaterialTextField {
-                id: field
-                width: parent.width
-                type: MaterialTextField.Outlined
-                label: "Playlist name"
-                supportingText: page.error
-                error: page.error !== ""
-                maximumLength: 40
-                cursorBlink: true
-                contentColor: Theme.onSurfaceColor
-                labelColor: Theme.onSurfaceVariantColor
-                accentColor: Theme.onSurfaceColor
-                outlineColor: Theme.outline
-                errorColor: Theme.onSurfaceColor
-                onTextChanged: page.error = ""
-                onAccepted: page.submit()
-            }
-
-            Row {
-                anchors.right: parent.right
-                spacing: 8
-
-                MaterialButton {
-                    label: "Cancel"
-                    type: MaterialButton.Text
-                    contentColor: Theme.onSurfaceColor
-                    onClicked: page.closeSheet()
-                }
-
-                MaterialButton {
-                    label: "Create"
-                    type: MaterialButton.Filled
-                    color: Theme.primary
-                    contentColor: Theme.onPrimaryColor
-                    onClicked: page.submit()
                 }
             }
         }
