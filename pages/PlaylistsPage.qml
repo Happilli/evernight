@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import Evernight.Shapes
 import Evernight
 
 FadePage {
@@ -13,6 +12,26 @@ FadePage {
         return false;
     }
 
+    function toUrl(s) {
+        if (!s)
+            return "";
+        const v = String(s);
+        return v.indexOf("://") >= 0 || v.indexOf("qrc:") === 0 ? v : "file://" + v;
+    }
+
+    function thumbFor(list) {
+        const t = Controller.tracks;
+        const byUri = {};
+        for (let i = 0; i < t.length; i++)
+            byUri[t[i].uri] = t[i];
+        for (let k = 0; k < list.tracks.length; k++) {
+            const tr = byUri[list.tracks[k]];
+            if (tr && tr.thumb)
+                return page.toUrl(tr.thumb);
+        }
+        return "";
+    }
+
     Flickable {
         id: flick
         flickableDirection: Flickable.VerticalFlick
@@ -21,127 +40,164 @@ FadePage {
         }
         anchors.fill: parent
         anchors.topMargin: 12
-        anchors.leftMargin: 16
-        anchors.rightMargin: 16
+        anchors.leftMargin: 12
+        anchors.rightMargin: 12
         clip: true
         contentWidth: width
-        contentHeight: grid.height + (Controller.current >= 0 ? 130 : 40)
+        contentHeight: col.height + 24
         boundsBehavior: Flickable.StopAtBounds
 
-        Grid {
-            id: grid
-            width: flick.width
-            spacing: 12
-            columns: Math.max(2, Math.floor((flick.width + spacing) / 172))
-            readonly property real cellW: (width - spacing * (columns - 1)) / columns
-            readonly property real cellH: cellW * 1.18
+        Column {
+            id: col
+            spacing: 0
 
-            Rectangle {
-                width: grid.cellW
-                height: grid.cellH
-                radius: 28
-                color: "transparent"
-                border.width: 2
-                border.color: Theme.outline
-                scale: addArea.pressed ? 0.96 : 1
-
-                Behavior on scale {
-                    NumberAnimation {
-                        duration: 120
-                        easing.type: Easing.OutCubic
-                    }
-                }
-
-                Column {
-                    anchors.centerIn: parent
-                    spacing: 8
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "+"
-                        color: Theme.onSurfaceColor
-                        font.pixelSize: 64
-                        font.weight: Font.Light
-                    }
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "New playlist"
-                        color: Theme.onSurfaceVariantColor
-                        font.pixelSize: 15
-                        font.weight: Font.Medium
-                    }
-                }
-
-                MouseArea {
-                    id: addArea
-                    anchors.fill: parent
-                    onClicked: page.createRequested()
-                }
-            }
-
-            Repeater {
-                model: Playlists.playlists
+            Item {
+                width: grid.width
+                height: 96
 
                 Rectangle {
-                    id: card
-                    required property var modelData
-                    width: grid.cellW
-                    height: grid.cellH
+                    id: addBox
+                    anchors.fill: parent
+                    anchors.bottomMargin: 16
                     radius: 28
-                    color: Theme.surfaceContainer
-                    scale: area.pressed ? 0.96 : 1
+                    color: "transparent"
+                    border.width: 1
+                    border.color: Theme.outlineVariant
 
-                    Behavior on scale {
-                        NumberAnimation {
-                            duration: 120
-                            easing.type: Easing.OutCubic
-                        }
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: parent.radius
+                        color: Theme.onSurfaceColor
+                        opacity: addArea.pressed ? 0.08 : 0
                     }
 
-                    MaterialShape {
-                        x: (parent.width - width) / 2
-                        y: 16
-                        width: parent.width * 0.62
-                        height: width
-                        shape: MaterialShape.Cookie9Sided
-                        color: Theme.secondaryContainer
-                        glyph: "\u266B"
-                        glyphColor: Theme.onSurfaceColor
-                        glyphSize: width * 0.5
-                    }
-
-                    Column {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.bottom: parent.bottom
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 16
-                        anchors.bottomMargin: 14
-                        spacing: 2
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 12
 
                         Text {
-                            width: parent.width
-                            text: card.modelData.name
-                            elide: Text.ElideRight
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "+"
                             color: Theme.onSurfaceColor
-                            font.pixelSize: 16
-                            font.weight: Font.Medium
+                            font.pixelSize: 34
+                            font.weight: Font.Light
                         }
-
                         Text {
-                            width: parent.width
-                            text: card.modelData.count + (card.modelData.count === 1 ? " song" : " songs")
-                            elide: Text.ElideRight
-                            color: Theme.onSurfaceVariantColor
-                            font.pixelSize: 13
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "New playlist"
+                            color: Theme.onSurfaceColor
+                            font.pixelSize: 17
+                            font.weight: Font.Medium
                         }
                     }
 
                     MouseArea {
-                        id: area
+                        id: addArea
                         anchors.fill: parent
-                        onClicked: page.openRequested(card.modelData.id)
+                        onClicked: page.createRequested()
+                    }
+                }
+            }
+
+            Grid {
+                id: grid
+                spacing: 0
+                columns: Math.max(2, Math.floor(flick.width / 172))
+                readonly property real cellW: Math.floor(flick.width / columns)
+                readonly property real cellH: cellW + 56
+                width: cellW * columns
+
+                Repeater {
+                    model: Playlists.playlists
+
+                    Item {
+                        id: cell
+                        required property var modelData
+                        required property int index
+                        readonly property string thumb: page.thumbFor(modelData)
+                        width: grid.cellW
+                        height: grid.cellH
+
+                        Rectangle {
+                            x: 0
+                            y: 0
+                            width: grid.cellW
+                            height: grid.cellW
+                            color: Theme.secondaryContainer
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "\u266B"
+                                color: Theme.onSurfaceColor
+                                font.pixelSize: parent.width * 0.35
+                                visible: art.status !== Image.Ready
+                            }
+
+                            Image {
+                                id: art
+                                anchors.fill: parent
+                                source: cell.thumb
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                sourceSize.width: 400
+                                sourceSize.height: 400
+                            }
+                        }
+
+                        Column {
+                            x: 12
+                            y: grid.cellW + 8
+                            width: parent.width - 24
+                            spacing: 2
+
+                            Text {
+                                width: parent.width
+                                text: cell.modelData.name
+                                elide: Text.ElideRight
+                                color: Theme.onSurfaceColor
+                                font.pixelSize: 16
+                                font.weight: Font.Medium
+                            }
+                            Text {
+                                width: parent.width
+                                text: cell.modelData.count + (cell.modelData.count === 1 ? " song" : " songs")
+                                elide: Text.ElideRight
+                                color: Theme.onSurfaceVariantColor
+                                font.pixelSize: 13
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: Theme.onSurfaceColor
+                            opacity: area.pressed ? 0.08 : 0
+                        }
+
+                        Rectangle {
+                            anchors.left: parent.left
+                            height: parent.height
+                            width: 1
+                            color: Theme.outlineVariant
+                            visible: cell.index % grid.columns === 0
+                        }
+                        Rectangle {
+                            anchors.right: parent.right
+                            height: parent.height
+                            width: 1
+                            color: Theme.outlineVariant
+                        }
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: 1
+                            color: Theme.outlineVariant
+                        }
+
+                        MouseArea {
+                            id: area
+                            anchors.fill: parent
+                            onClicked: page.openRequested(cell.modelData.id)
+                        }
                     }
                 }
             }

@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Window
 import QtQml.Models
@@ -104,7 +105,9 @@ Window {
         anchors.bottomMargin: root.playerInset
         active: root.detailId !== ""
         sourceComponent: Component {
-            PlaylistDetail {}
+            PlaylistDetail {
+                playlistId: root.detailId
+            }
         }
     }
 

@@ -8,6 +8,8 @@ Item {
     property string playlistId: ""
     property var shown: null
     readonly property real statusInset: 40
+    property bool ready: false
+    readonly property real scrollOffset: ready ? Math.max(0, dflick.contentY + dflick.topMargin - statusInset) : 0
 
     signal closeRequested
     signal renameRequested(string id, string name)
@@ -20,6 +22,10 @@ Item {
             if (l[i].id === root.playlistId)
                 return l[i];
         return null;
+    }
+    Component.onCompleted: {
+        if (detailList)
+            shown = detailList;
     }
 
     readonly property var detailRows: {
@@ -101,7 +107,10 @@ Item {
         contentHeight: dcol.height + 40
         flickableDirection: Flickable.VerticalFlick
         boundsBehavior: Flickable.StopAtBounds
-        Component.onCompleted: contentY = -topMargin
+        Component.onCompleted: {
+            contentY = -topMargin;
+            root.ready = true;
+        }
 
         Column {
             id: dcol
@@ -109,11 +118,18 @@ Item {
             spacing: 12
 
             Row {
+                id: actions
+                width: parent.width
                 spacing: 12
 
+                readonly property real btnW: (width - spacing) / 2
+
                 MaterialButton {
+                    width: actions.btnW
                     label: "Play"
+                    iconSource: "../icons/play.svg"
                     type: MaterialButton.Filled
+                    sizeStyle: MaterialButton.Medium
                     color: Theme.primary
                     contentColor: Theme.onPrimaryColor
                     enabled: root.detailRows.uris.length > 0
@@ -121,15 +137,17 @@ Item {
                 }
 
                 MaterialButton {
+                    width: actions.btnW
                     label: "Shuffle"
+                    iconSource: "../icons/shuffle.svg"
                     type: MaterialButton.Tonal
+                    sizeStyle: MaterialButton.Medium
                     color: Theme.secondaryContainer
                     contentColor: Theme.onSurfaceColor
                     enabled: root.detailRows.uris.length > 0
                     onClicked: root.playAll(true)
                 }
             }
-
             MaterialList {
                 width: parent.width
                 visible: root.detailRows.uris.length > 0
@@ -182,7 +200,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         height: root.statusInset
-        color: bar.scrolled ? Theme.surfaceContainer : Theme.background
+        color: root.scrollOffset > 1 ? Theme.surfaceContainer : Theme.background
     }
 
     MaterialAppBar {
@@ -205,8 +223,8 @@ Item {
         titleColor: Theme.onSurfaceColor
         subtitleColor: Theme.onSurfaceVariantColor
         iconColor: Theme.onSurfaceColor
-        collapse: bar.collapseRange > 0 ? Math.max(0, Math.min(1, (dflick.contentY + dflick.topMargin - root.statusInset) / bar.collapseRange)) : 0
-        scrolled: dflick.contentY + dflick.topMargin - root.statusInset > 1
+        collapse: bar.collapseRange > 0 ? Math.min(1, root.scrollOffset / bar.collapseRange) : 0
+        scrolled: root.scrollOffset > 1
         onNavigationClicked: root.closeRequested()
         onActionClicked: (index, item, anchor) => moreMenu.popup(anchor.x, anchor.y + root.statusInset)
     }

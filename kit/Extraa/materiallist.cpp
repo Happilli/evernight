@@ -228,6 +228,11 @@ bool MaterialList::visibleRows(int &first, int &last) const {
   const int n = int(m_items.size());
   if (n == 0)
     return false;
+  if (n <= kWindow) {
+    first = 0;
+    last = n - 1;
+    return true;
+  }
   qreal top = 0.0;
   qreal bottom = height();
   if (window()) {
