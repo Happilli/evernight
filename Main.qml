@@ -23,7 +23,7 @@ Window {
             songSheet.open = false;
             return true;
         }
-        if (detailLoader.item && detailLoader.item.handleBack())
+        if (detailLoader.page && detailLoader.page.handleBack())
             return true;
         if (detailId !== "") {
             detailId = "";
@@ -31,7 +31,6 @@ Window {
         }
         return songsPage.handleBack() || playlistsPage.handleBack();
     }
-
     onClosing: close => {
         if (handleBack())
             close.accepted = false;
@@ -98,6 +97,7 @@ Window {
 
     Loader {
         id: detailLoader
+        readonly property PlaylistDetail page: item as PlaylistDetail
         anchors.fill: parent
         anchors.bottomMargin: root.playerInset
         active: root.detailId !== ""

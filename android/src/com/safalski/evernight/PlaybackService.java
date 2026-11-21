@@ -13,6 +13,8 @@ import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.Icon;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaMetadata;
 import android.media.session.MediaSession;
@@ -21,22 +23,22 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.util.Log;
 
 public class PlaybackService extends Service {
+    private static final String TAG = "Evernight";
     private static final int NOTIFICATION_ID = 1;
     private static final String CHANNEL_ID = "play";
-
     private static final String ACTION_PLAY = "com.safalski.evernight.PLAY";
     private static final String ACTION_PAUSE = "com.safalski.evernight.PAUSE";
     private static final String ACTION_NEXT = "com.safalski.evernight.NEXT";
     private static final String ACTION_PREV = "com.safalski.evernight.PREV";
-
     private static final int CMD_PLAY = 0;
     private static final int CMD_PAUSE = 1;
     private static final int CMD_NEXT = 2;
     private static final int CMD_PREV = 3;
     private static final int CMD_SEEK = 4;
-
     private static final long SESSION_ACTIONS = PlaybackState.ACTION_PLAY
             | PlaybackState.ACTION_PAUSE
             | PlaybackState.ACTION_PLAY_PAUSE
@@ -45,7 +47,6 @@ public class PlaybackService extends Service {
             | PlaybackState.ACTION_SKIP_TO_PREVIOUS;
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
-
     private static PlaybackService live;
     private static String title = "Evernight";
     private static String artist = "";
@@ -81,7 +82,8 @@ public class PlaybackService extends Service {
             } else if (pl) {
                 try {
                     app.startForegroundService(new Intent(app, PlaybackService.class));
-                } catch (RuntimeException ignored) {
+                } catch (RuntimeException e) {
+                    Log.w(TAG, "startForegroundService failed", e);
                 }
             }
         });
@@ -100,6 +102,33 @@ public class PlaybackService extends Service {
         }
     };
 
+    private boolean hasFocus;
+    private boolean resumeOnGain;
+
+    private final AudioManager.OnAudioFocusChangeListener focusListener = change -> {
+        switch (change) {
+            case AudioManager.AUDIOFOCUS_GAIN:
+                hasFocus = true;
+                if (resumeOnGain) {
+                    resumeOnGain = false;
+                    send(CMD_PLAY, 0);
+                }
+                break;
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                hasFocus = false;
+                resumeOnGain = playing;
+                send(CMD_PAUSE, 0);
+                break;
+            case AudioManager.AUDIOFOCUS_LOSS:
+                hasFocus = false;
+                resumeOnGain = false;
+                send(CMD_PAUSE, 0);
+                break;
+            default:
+                break;
+        }
+    };
+
     private NotificationManager nm;
     private MediaSession session;
     private PendingIntent openIntent;
@@ -107,7 +136,6 @@ public class PlaybackService extends Service {
     private Notification.Action playAction;
     private Notification.Action pauseAction;
     private Notification.Action nextAction;
-
     private Bitmap art;
     private String artPath = "";
     private String shownKey = "";
@@ -115,6 +143,9 @@ public class PlaybackService extends Service {
     private boolean shownPlaying;
     private boolean foreground;
     private boolean promoted;
+    private PowerManager.WakeLock wakeLock;
+    private AudioManager audioManager;
+    private AudioFocusRequest focusRequest;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -125,23 +156,20 @@ public class PlaybackService extends Service {
     public void onCreate() {
         super.onCreate();
         live = this;
-
         nm = getSystemService(NotificationManager.class);
+        audioManager = getSystemService(AudioManager.class);
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID, "Playback", NotificationManager.IMPORTANCE_LOW);
         channel.setShowBadge(false);
         nm.createNotificationChannel(channel);
-
         Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (launch != null)
             openIntent = PendingIntent.getActivity(this, 0, launch,
                     PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-
         prevAction = buildAction(android.R.drawable.ic_media_previous, "Previous", ACTION_PREV, 10);
         playAction = buildAction(android.R.drawable.ic_media_play, "Play", ACTION_PLAY, 11);
         pauseAction = buildAction(android.R.drawable.ic_media_pause, "Pause", ACTION_PAUSE, 12);
         nextAction = buildAction(android.R.drawable.ic_media_next, "Next", ACTION_NEXT, 13);
-
         session = new MediaSession(this, "Evernight");
         session.setCallback(new MediaSession.Callback() {
             @Override public void onPlay() { send(CMD_PLAY, 0); }
@@ -153,7 +181,6 @@ public class PlaybackService extends Service {
         if (openIntent != null)
             session.setSessionActivity(openIntent);
         session.setActive(true);
-
         IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
         if (Build.VERSION.SDK_INT >= 33)
             registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
@@ -194,6 +221,12 @@ public class PlaybackService extends Service {
             unregisterReceiver(noisyReceiver);
         } catch (IllegalArgumentException ignored) {
         }
+        if (wakeLock != null && wakeLock.isHeld())
+            wakeLock.release();
+        if (focusRequest != null && audioManager != null)
+            audioManager.abandonAudioFocusRequest(focusRequest);
+        hasFocus = false;
+        resumeOnGain = false;
         stopForeground(STOP_FOREGROUND_REMOVE);
         nm.cancel(NOTIFICATION_ID);
         session.setActive(false);
@@ -223,10 +256,8 @@ public class PlaybackService extends Service {
             artPath = thumb;
             art = decode(thumb);
         }
-
         final String key = title + '\u0000' + artist + '\u0000' + artPath;
         final boolean metaChanged = !key.equals(shownKey) || duration != shownDuration;
-
         if (metaChanged) {
             MediaMetadata.Builder md = new MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, title)
@@ -238,13 +269,11 @@ public class PlaybackService extends Service {
             shownKey = key;
             shownDuration = duration;
         }
-
         session.setPlaybackState(new PlaybackState.Builder()
                 .setActions(SESSION_ACTIONS)
                 .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED,
                         Math.max(0L, position), playing ? 1f : 0f)
                 .build());
-
         if (metaChanged || playing != shownPlaying || !promoted)
             publish();
     }
@@ -287,6 +316,8 @@ public class PlaybackService extends Service {
             nm.notify(NOTIFICATION_ID, n);
         }
         shownPlaying = playing;
+        syncWakeLock();
+        syncFocus();
     }
 
     private void promote(Notification n) {
@@ -295,6 +326,7 @@ public class PlaybackService extends Service {
             foreground = true;
             promoted = true;
         } catch (RuntimeException e) {
+            Log.w(TAG, "startForeground failed", e);
             nm.notify(NOTIFICATION_ID, n);
         }
     }
@@ -304,5 +336,39 @@ public class PlaybackService extends Service {
             return;
         stopForeground(STOP_FOREGROUND_DETACH);
         foreground = false;
+    }
+
+    private void syncWakeLock() {
+        if (playing) {
+            if (wakeLock == null) {
+                PowerManager pm = getSystemService(PowerManager.class);
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "evernight:playback");
+                wakeLock.setReferenceCounted(false);
+            }
+            if (!wakeLock.isHeld())
+                wakeLock.acquire();
+        } else if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
+        }
+    }
+
+    private void syncFocus() {
+        if (playing && !hasFocus) {
+            if (focusRequest == null) {
+                focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                        .setAudioAttributes(new AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                                .build())
+                        .setOnAudioFocusChangeListener(focusListener, MAIN)
+                        .build();
+            }
+            hasFocus = audioManager.requestAudioFocus(focusRequest)
+                    == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+            Log.i(TAG, "audio focus granted=" + hasFocus);
+        } else if (!playing && hasFocus && focusRequest != null) {
+            audioManager.abandonAudioFocusRequest(focusRequest);
+            hasFocus = false;
+        }
     }
 }
