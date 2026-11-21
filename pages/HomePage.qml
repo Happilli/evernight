@@ -7,7 +7,7 @@ FadePage {
     property var matches: []
     property var recent: []
     property bool fromCarousel: false
-
+    signal songLongPressed(string uri, string title, string artist, string playlistId)
     function refresh() {
         matches = Controller.search("");
     }
@@ -37,13 +37,8 @@ FadePage {
     readonly property int shownCurrent: Controller.current >= 0 ? page.matches.indexOf(Controller.current) : -1
 
     function handleBack() {
-        if (songSheet.open) {
-            songSheet.open = false;
-            return true;
-        }
         return false;
     }
-
     Item {
         id: pinned
         anchors.top: parent.top
@@ -167,7 +162,7 @@ FadePage {
                 onClicked: (index, item) => Controller.playAt(page.matches[index])
                 onLongPressed: (index, item) => {
                     const t = Controller.tracks[page.matches[index]];
-                    songSheet.openFor(t.uri, t.title, t.artist, "");
+                    page.songLongPressed(t.uri, t.title, t.artist, "");
                 }
             }
 
@@ -196,11 +191,5 @@ FadePage {
                 }
             }
         }
-    }
-
-    SongSheet {
-        id: songSheet
-        anchors.fill: parent
-        z: 10
     }
 }

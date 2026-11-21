@@ -77,6 +77,7 @@ Window {
         model: ObjectModel {
             HomePage {
                 id: homePage
+                onSongLongPressed: (uri, title, artist, playlistId) => songSheet.openFor(uri, title, artist, playlistId)
             }
             PlaylistsPage {
                 id: playlistsPage
