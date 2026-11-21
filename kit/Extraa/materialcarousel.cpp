@@ -1,4 +1,5 @@
 #include "./materialcarousel.hpp"
+#include "../Core/paintutil.hpp"
 #include <QFontMetricsF>
 #include <QImageReader>
 #include <QMetaObject>
@@ -12,6 +13,7 @@
 #include <QSGTextureMaterial>
 #include <QSGVertexColorMaterial>
 #include <QThreadPool>
+#include <QTimer>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -288,7 +290,7 @@ void MaterialCarousel::layoutItems() {
   };
 
   auto hero = [&]() -> bool {
-    const int sc = avail >= 280.0 ? 2 : 1;
+    const int sc = 1;
     const qreal Ls = avail - sc * (S + g);
     const qreal Lm = avail - (sc + 1) * (S + g);
     if (Lm < S * 1.5)
@@ -666,6 +668,7 @@ void MaterialCarousel::mousePressEvent(QMouseEvent *e) {
   m_clock.restart();
   m_lastMs = 0;
   update();
+  QTimer::singleShot(120, this, [this] { update(); });
   e->accept();
 }
 
@@ -723,8 +726,14 @@ void MaterialCarousel::mouseReleaseEvent(QMouseEvent *e) {
   } else {
     if (m_snap)
       goTo(snapF(m_pos.x));
-    if (idx >= 0 && itemAt(e->position()) == idx)
+    if (idx >= 0 && itemAt(e->position()) == idx) {
+      m_flashIndex = idx;
+      QTimer::singleShot(150, this, [this] {
+        m_flashIndex = -1;
+        update();
+      });
       activate(idx);
+    }
   }
   update();
   e->accept();
@@ -994,12 +1003,10 @@ void MaterialCarousel::build(Kit::Mesh &m) {
   const int n = m_items.size();
   if (n == 0 || width() <= 0.0 || height() <= 0.0)
     return;
-
   const QFont headF = Kit::styledFont(m_font, 16.0, m_fontWeight);
   const QFont supF = Kit::styledFont(m_font, 14.0, QFont::Normal);
   const QFontMetricsF headM(headF);
   const QFontMetricsF supM(supF);
-
   for (const Slot &s : std::as_const(m_vis)) {
     const Entry &e = m_items[s.index];
     const QRectF r = rectFor(s);
@@ -1008,29 +1015,26 @@ void MaterialCarousel::build(Kit::Mesh &m) {
     auto d = [dim](const QColor &c) {
       return Kit::withAlpha(c, c.alphaF() * dim);
     };
-
     const bool hasImg = !e.path.isEmpty();
     if (!hasImg) {
       const QColor bg = e.color.isValid() ? e.color : m_itemColor;
       if (bg.alpha() > 0)
         m.fillRoundedRect(r, rad, rad, rad, rad, d(bg));
     }
-
     if (m_borderWidth > 0.0 && m_borderColor.alpha() > 0)
       m.strokeRoundedRect(r, rad, rad, rad, rad, m.snapStroke(m_borderWidth),
                           d(m_borderColor));
-
-    const bool pressed = m_pressIndex == s.index && !m_dragging;
+    const bool pressed = (m_pressIndex == s.index && !m_dragging && m_pressed &&
+                          m_clock.elapsed() >= 120) ||
+                         m_flashIndex == s.index;
     if (pressed)
       m.fillRoundedRect(r, rad, rad, rad, rad,
                         d(Kit::withAlpha(m_stateLayerColor, 0.50)));
-
     const bool hasH = !e.headline.isEmpty();
     const bool hasS = !e.supporting.isEmpty();
     const qreal la = labelAlpha(s.size);
     if (la <= 0.0 || (!hasH && !hasS))
       continue;
-
     const QColor base = hasImg ? m_imageTextColor : m_textColor;
     const QColor fg = Kit::withAlpha(base, base.alphaF() * la * dim);
     const qreal availW =
@@ -1038,7 +1042,6 @@ void MaterialCarousel::build(Kit::Mesh &m) {
     const qreal x = r.left() + kPad;
     qreal ty =
         r.bottom() - kPad - (hasH ? kHeadLh : 0.0) - (hasS ? kSupLh : 0.0);
-
     if (hasH) {
       const QString t = headM.elidedText(e.headline, Qt::ElideRight, availW);
       textLayer(s.index * 2, headF, t, fg, x, ty + kHeadLh / 2.0);

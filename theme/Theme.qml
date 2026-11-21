@@ -1,8 +1,12 @@
 pragma Singleton
 import QtQuick
+import Evernight
 
 QtObject {
-    property int mode: 0
+    property int mode: {
+        const m = Number(Store.get("themeMode", 0));
+        return m >= 0 && m <= 2 ? m : 0;
+    }
     readonly property bool dark: mode === 0 ? Application.styleHints.colorScheme !== Qt.ColorScheme.Light : mode === 2
 
     readonly property color background: dark ? "#000000" : "#FFFFFF"

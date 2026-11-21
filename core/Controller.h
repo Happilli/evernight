@@ -26,6 +26,7 @@ class Controller : public QObject {
                  repeatModeChanged)
   Q_PROPERTY(
       bool autoNext READ autoNext WRITE setAutoNext NOTIFY autoNextChanged)
+  Q_PROPERTY(QVariantList recent READ recent NOTIFY recentChanged)
 
 public:
   explicit Controller(QObject *parent = nullptr);
@@ -35,6 +36,7 @@ public:
   Spectrum *spectrum() { return &m_spectrum; }
   DiscordPresence *discord() { return &m_discord; }
   QVariantList tracks() const;
+  QVariantList recent() const;
   int current() const { return m_current; }
   bool playing() const {
     return m_player.state() == QMediaPlayer::PlayingState;
@@ -58,6 +60,7 @@ public:
 
 signals:
   void tracksChanged();
+  void recentChanged();
   void currentChanged();
   void playingChanged();
   void shuffleChanged();
@@ -95,6 +98,7 @@ private:
   Spectrum m_spectrum;
   DiscordPresence m_discord;
   QList<Track> m_tracks;
+  QStringList m_recent;
   QList<int> m_queue;
   int m_current = -1;
   bool m_shuffle = false;

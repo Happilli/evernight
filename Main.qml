@@ -29,7 +29,7 @@ Window {
             detailId = "";
             return true;
         }
-        return songsPage.handleBack() || playlistsPage.handleBack();
+        return homePage.handleBack() || playlistsPage.handleBack();
     }
     onClosing: close => {
         if (handleBack())
@@ -75,8 +75,8 @@ Window {
         maximumFlickVelocity: 2500
         cacheBuffer: width * 3
         model: ObjectModel {
-            SongsPage {
-                id: songsPage
+            HomePage {
+                id: homePage
             }
             PlaylistsPage {
                 id: playlistsPage

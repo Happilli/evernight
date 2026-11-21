@@ -84,7 +84,7 @@ int tokenScore(const QString &tok, const QStringList &words) {
 #ifdef Q_OS_ANDROID
 
 constexpr int kSdkNotifications = 33;
-constexpr int kThumbSize = 128;
+constexpr int kThumbSize = 512;
 constexpr qint64 kSeekJumpMs = 1500;
 
 enum Command { CmdPlay, CmdPause, CmdNext, CmdPrev, CmdSeek };
@@ -349,6 +349,10 @@ Controller::Controller(QObject *parent) : QObject(parent) {
           });
   connect(this, &Controller::tracksChanged, this,
           [this] { m_normDirty = true; });
+
+  m_autoNext = QSettings().value("autoNext", true).toBool();
+  m_shuffle = QSettings().value("shuffle", false).toBool();
+  m_repeatMode = qBound(0, QSettings().value("repeatMode", 0).toInt(), 2);
   QTimer::singleShot(0, this, [this] {
     m_discord.setEnabled(QSettings().value("discord", false).toBool());
   });
@@ -386,7 +390,8 @@ Controller::Controller(QObject *parent) : QObject(parent) {
             importLibrary();
           });
 #endif
-
+  m_recent = QSettings().value("recent").toStringList();
+  connect(this, &Controller::tracksChanged, this, &Controller::recentChanged);
   loadCache();
   restoreState();
   QTimer::singleShot(0, this, &Controller::scanLibrary);
@@ -420,6 +425,21 @@ void Controller::saveCache() const {
                            {"artist", t.artist},
                            {"thumb", t.thumb}});
   Store::writeLibrary(arr);
+}
+
+QVariantList Controller::recent() const {
+  QHash<QString, int> byUrl;
+  for (int i = 0; i < m_tracks.size(); ++i)
+    byUrl.insert(m_tracks[i].url.toString(), i);
+  QVariantList out;
+  for (const QString &u : m_recent) {
+    if (out.size() >= 5)
+      break;
+    const auto it = byUrl.constFind(u);
+    if (it != byUrl.constEnd())
+      out.append(it.value());
+  }
+  return out;
 }
 
 void Controller::restoreState() {
@@ -504,6 +524,13 @@ void Controller::play(int index) {
   m_pendingSeek = -1;
   m_current = index;
   emit currentChanged();
+  const QString u = m_tracks[index].url.toString();
+  m_recent.removeAll(u);
+  m_recent.prepend(u);
+  while (m_recent.size() > 5)
+    m_recent.removeLast();
+  QSettings().setValue("recent", m_recent);
+  emit recentChanged();
   m_player.play();
   saveState(true);
 }
