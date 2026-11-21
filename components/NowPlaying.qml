@@ -3,6 +3,7 @@ import QtQuick
 import Evernight.Shapes
 import Evernight.Extraa
 import Evernight
+import QtQuick.Shapes
 
 Rectangle {
     id: root
@@ -155,6 +156,54 @@ Rectangle {
             root.p = Math.max(0, Math.min(1, root.startP - translation.y / root.travel));
         }
     }
+    Shape {
+        id: glow
+        readonly property real side: root.artSize * 2.1
+        width: side
+        height: side
+        x: (root.pw - side) / 2 + root.swipeX * root.p
+        y: root.artTop + root.artSize / 2 - side / 2 + root.arcY * root.p
+        opacity: Math.max(0, root.p * 2 - 1)
+        visible: opacity > 0 && Controller.info.hasCover
+        preferredRendererType: Shape.CurveRenderer
+
+        ShapePath {
+            strokeColor: "transparent"
+            fillGradient: RadialGradient {
+                centerX: glow.side / 2
+                centerY: glow.side / 2
+                centerRadius: glow.side / 2
+                focalX: centerX
+                focalY: centerY
+                GradientStop {
+                    position: 0.0
+                    color: Qt.alpha(root.ringColor, 0.5)
+                }
+                GradientStop {
+                    position: 0.5
+                    color: Qt.alpha(root.ringColor, 0.22)
+                }
+                GradientStop {
+                    position: 1.0
+                    color: Qt.alpha(root.ringColor, 0.0)
+                }
+            }
+            startX: 0
+            startY: 0
+            PathLine {
+                x: glow.side
+                y: 0
+            }
+            PathLine {
+                x: glow.side
+                y: glow.side
+            }
+            PathLine {
+                x: 0
+                y: glow.side
+            }
+        }
+    }
 
     MaterialShape {
         x: root.mix(14, (root.pw - root.artSize) / 2) + root.swipeX * root.p
@@ -173,12 +222,13 @@ Rectangle {
         border.color: root.ringColor
     }
 
-    Text {
+    MarqueeText {
         id: title
         width: root.mix(root.pw - 252, root.pw - 64)
-        x: root.mix(68, 32) + root.p * Math.max(0, (width - contentWidth) / 2) + root.swipeX * 0.3 * root.p
+        x: root.mix(68, 32) + root.swipeX * 0.3 * root.p
         y: root.mix(16, root.artTop + root.artSize + 18)
-        elide: Text.ElideRight
+        centering: root.p
+        running: (root.p < 0.02 || root.p > 0.98) && Math.abs(root.swipeX) < 1
         color: Theme.onSurfaceColor
         font.pixelSize: Math.round(root.mix(15, 24))
         font.weight: Font.Medium
@@ -186,16 +236,17 @@ Rectangle {
         opacity: 1 - Math.min(1, Math.abs(root.swipeX) / Math.max(1, root.pw) * 1.5)
     }
 
-    Text {
+    MarqueeText {
         id: sub
         width: title.width
-        x: root.mix(68, 32) + root.p * Math.max(0, (width - contentWidth) / 2) + root.swipeX * 0.3 * root.p
+        x: title.x
         y: title.y + root.mix(20, 34)
-        elide: Text.ElideRight
+        centering: root.p
+        running: title.running
         color: Theme.onSurfaceVariantColor
         font.pixelSize: Math.round(root.mix(13, 16))
         text: root.subText
-        opacity: 1 - Math.min(1, Math.abs(root.swipeX) / Math.max(1, root.pw) * 1.5)
+        opacity: title.opacity
     }
 
     Item {
