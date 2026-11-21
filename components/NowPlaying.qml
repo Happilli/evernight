@@ -7,7 +7,9 @@ import QtQuick.Shapes
 
 Rectangle {
     id: root
+    signal queueRequested
 
+    property bool blocked: false
     property real p: 0
     property bool dragging: false
     property real startP: 0
@@ -41,6 +43,7 @@ Rectangle {
     readonly property real pw: parent ? parent.width : 0
     readonly property real ph: parent ? parent.height : 0
     readonly property real travel: Math.max(1, ph - miniHeight - miniBottom)
+    readonly property real dragTravel: Math.min(travel, 380)
     readonly property real artSize: Math.min(pw - 64, ph * 0.34, 300)
     readonly property real artTop: Math.max(60, (ph - artSize - 420) / 2)
     readonly property real controlsTop: artTop + artSize + 90
@@ -128,12 +131,14 @@ Rectangle {
     }
 
     MouseArea {
+        enabled: !root.blocked
         anchors.fill: parent
         onClicked: if (root.p < 0.5)
             root.expand()
     }
 
     DragHandler {
+        enabled: !root.blocked
         target: null
         xAxis.enabled: false
         onActiveChanged: {
@@ -143,17 +148,19 @@ Rectangle {
                 root.dragging = true;
             } else if (root.dragging) {
                 root.dragging = false;
-                if (Math.abs(root.lastVy) > 500)
+                if (Math.abs(root.lastVy) > 200)
                     root.p = root.lastVy < 0 ? 1 : 0;
+                else if (root.startP < 0.5)
+                    root.p = root.p > 0.15 ? 1 : 0;
                 else
-                    root.p = root.p > 0.5 ? 1 : 0;
+                    root.p = root.p < 0.85 ? 0 : 1;
             }
         }
         onTranslationChanged: {
             if (!active)
                 return;
             root.lastVy = centroid.velocity.y;
-            root.p = Math.max(0, Math.min(1, root.startP - translation.y / root.travel));
+            root.p = Math.max(0, Math.min(1, root.startP - translation.y / root.dragTravel));
         }
     }
     Shape {
@@ -255,6 +262,7 @@ Rectangle {
         enabled: root.p > 0.9
 
         DragHandler {
+            enabled: !root.blocked
             target: null
             yAxis.enabled: false
             onActiveChanged: {
@@ -346,6 +354,9 @@ Rectangle {
 
         sourceComponent: NowPlayingControls {
             pw: root.pw
+            onQueueRequested: {
+                root.queueRequested();
+            }
         }
     }
 }

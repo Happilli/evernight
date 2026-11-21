@@ -6,6 +6,7 @@ Column {
     id: root
 
     property real pw: 0
+    signal queueRequested
 
     function fmt(ms) {
         var s = Math.floor(Math.max(0, ms) / 1000);
@@ -196,6 +197,17 @@ Column {
             onClicked: {
                 Controller.autoNext = !Controller.autoNext;
                 Store.set("autoNext", Controller.autoNext);
+            }
+        }
+        MaterialIconButton {
+            type: MaterialIconButton.Standard
+            sizeStyle: MaterialIconButton.Medium
+            iconSize: 28
+            iconSource: "../icons/queue.svg"
+            color: "transparent"
+            iconColor: Theme.onSurfaceVariantColor
+            onClicked: {
+                root.queueRequested();
             }
         }
     }

@@ -14,6 +14,10 @@ Window {
     readonly property real playerInset: np.visible ? np.miniHeight + np.miniBottom + 12 : 0
 
     function handleBack() {
+        if (queueSheet.open) {
+            queueSheet.open = false;
+            return true;
+        }
         if (np.p > 0.5) {
             np.collapse();
             return true;
@@ -137,6 +141,10 @@ Window {
 
     NowPlaying {
         id: np
+        blocked: queueSheet.open
+        onQueueRequested: {
+            queueSheet.open = true;
+        }
     }
 
     Item {
@@ -150,6 +158,10 @@ Window {
 
         SongSheet {
             id: songSheet
+            anchors.fill: parent
+        }
+        QueueSheet {
+            id: queueSheet
             anchors.fill: parent
         }
     }
