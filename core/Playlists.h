@@ -27,6 +27,16 @@ public:
       if (!p.id.isEmpty() && !p.name.isEmpty())
         m_lists.append(p);
     }
+
+    bool hasLiked = false;
+    for (const Playlist &p : m_lists)
+      if (p.id == QStringLiteral("liked"))
+        hasLiked = true;
+    if (!hasLiked) {
+      m_lists.prepend(
+          {QStringLiteral("liked"), QStringLiteral("Liked songs"), {}});
+      save();
+    }
   }
 
   QVariantList playlists() const {
@@ -113,7 +123,28 @@ public:
         return p.tracks.contains(uri);
     return false;
   }
+  Q_INVOKABLE bool isLiked(const QString &uri) const {
+    return contains(QStringLiteral("liked"), uri);
+  }
 
+  Q_INVOKABLE bool toggleLike(const QString &uri) {
+    if (uri.isEmpty())
+      return false;
+    const QString id = QStringLiteral("liked");
+    Playlist *p = find(id);
+    if (!p) {
+      m_lists.prepend({id, QStringLiteral("Liked songs"), {}});
+      p = &m_lists.first();
+    }
+    const bool nowLiked = !p->tracks.contains(uri);
+    if (nowLiked)
+      p->tracks.append(uri);
+    else
+      p->tracks.removeOne(uri);
+    save();
+    emit changed();
+    return nowLiked;
+  }
 signals:
   void changed();
 
