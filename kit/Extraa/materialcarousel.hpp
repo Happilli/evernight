@@ -1,5 +1,4 @@
 #pragma once
-#include "../Core/paintutil.hpp"
 #include "../Core/sgitem.hpp"
 #include <QColor>
 #include <QElapsedTimer>
@@ -237,6 +236,7 @@ private:
   bool m_dragging = false;
   bool m_moved = false;
   int m_pressIndex = -1;
+  int m_flashIndex = -1;
   QPointF m_pressPt;
   qreal m_dragStartF = 0.0;
   qreal m_vel = 0.0;

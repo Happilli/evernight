@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core/sgitem.hpp"
 #include <QColor>
+#include <QElapsedTimer>
 #include <QFont>
 #include <QList>
 #include <QMouseEvent>
@@ -201,6 +202,8 @@ private:
   int m_eqIndex = -1;
   QList<qreal> m_eqLevels;
   int m_pressIndex = -1;
+  QElapsedTimer m_pressClock;
+  int m_flashIndex = -1;
   int m_pressShown = -1;
   Spring m_press;
   Spring m_hlY;

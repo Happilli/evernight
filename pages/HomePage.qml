@@ -4,22 +4,36 @@ import Evernight
 
 FadePage {
     id: page
-    property string query: ""
     property var matches: []
+    property var recent: []
+    property bool fromCarousel: false
 
     function refresh() {
-        matches = Controller.search(query);
+        matches = Controller.search("");
     }
 
-    onQueryChanged: refresh()
-    Component.onCompleted: refresh()
+    function refreshRecent() {
+        recent = Controller.recent;
+    }
+
+    Component.onCompleted: {
+        refresh();
+        refreshRecent();
+    }
 
     Connections {
         target: Controller
         function onTracksChanged() {
             page.refresh();
+            if (!page.fromCarousel)
+                page.refreshRecent();
+        }
+        function onRecentChanged() {
+            if (!page.fromCarousel)
+                page.refreshRecent();
         }
     }
+
     readonly property int shownCurrent: Controller.current >= 0 ? page.matches.indexOf(Controller.current) : -1
 
     function handleBack() {
@@ -30,25 +44,75 @@ FadePage {
         return false;
     }
 
-    MaterialSearchBox {
-        id: search
+    Item {
+        id: pinned
         anchors.top: parent.top
         anchors.topMargin: 12
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.leftMargin: 12
         anchors.rightMargin: 12
-        placeholderText: "Search songs"
-        clearable: true
-        showSearchIcon: true
-        color: Theme.surfaceContainerHigh
-        textColor: Theme.onSurfaceColor
-        placeholderColor: Theme.onSurfaceVariantColor
-        iconColor: Theme.onSurfaceVariantColor
-        cursorColor: Theme.onSurfaceColor
-        selectionColor: Qt.alpha(Theme.onSurfaceColor, 0.3)
-        onTextChanged: page.query = text
-        onAccepted: search.blur()
+        height: visible ? 190 : 0
+        visible: page.recent.length >= 3
+
+        MaterialCarousel {
+            id: carousel
+            property bool swiped: false
+
+            anchors.fill: parent
+            type: MaterialCarousel.Hero
+            snap: true
+            minSmallItemSize: 28
+            maxSmallItemSize: 40
+            itemSpacing: 8
+            itemRadius: 24
+            itemColor: Theme.secondaryContainer
+            textColor: Theme.onSurfaceColor
+            imageTextColor: Theme.onSurfaceColor
+            scrimColor: Qt.alpha(Theme.scrim, 0.6)
+            model: {
+                const t = Controller.tracks;
+                return page.recent.map(function (i) {
+                    return {
+                        headline: t[i].title,
+                        supporting: t[i].artist,
+                        image: t[i].thumb
+                    };
+                });
+            }
+
+            onDraggingChanged: {
+                if (dragging)
+                    swiped = true;
+            }
+            onCurrentIndexChanged: if (swiped)
+                settle.restart()
+
+            onClicked: (index, item) => {
+                settle.stop();
+                swiped = false;
+                const i = page.recent[index];
+                if (i === undefined || i === Controller.current)
+                    return;
+                page.fromCarousel = true;
+                Controller.playAt(i);
+                page.fromCarousel = false;
+            }
+
+            Timer {
+                id: settle
+                interval: 350
+                onTriggered: {
+                    carousel.swiped = false;
+                    const i = page.recent[carousel.currentIndex];
+                    if (i === undefined || i === Controller.current)
+                        return;
+                    page.fromCarousel = true;
+                    Controller.playAt(i);
+                    page.fromCarousel = false;
+                }
+            }
+        }
     }
 
     Flickable {
@@ -56,10 +120,8 @@ FadePage {
         flickableDirection: Flickable.VerticalFlick
         onDraggingVerticallyChanged: {
             page.ListView.view.interactive = !draggingVertically;
-            if (draggingVertically)
-                search.blur();
         }
-        anchors.top: search.bottom
+        anchors.top: pinned.bottom
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
@@ -68,7 +130,7 @@ FadePage {
         anchors.rightMargin: 12
         clip: true
         contentWidth: width
-        contentHeight: col.height + (Controller.current >= 0 ? 120 : 32)
+        contentHeight: col.height + 16
         boundsBehavior: Flickable.StopAtBounds
 
         Column {
@@ -102,12 +164,8 @@ FadePage {
                     });
                 }
                 checkedIndices: page.shownCurrent >= 0 ? [page.shownCurrent] : []
-                onClicked: (index, item) => {
-                    search.blur();
-                    Controller.playAt(page.matches[index]);
-                }
+                onClicked: (index, item) => Controller.playAt(page.matches[index])
                 onLongPressed: (index, item) => {
-                    search.blur();
                     const t = Controller.tracks[page.matches[index]];
                     songSheet.openFor(t.uri, t.title, t.artist, "");
                 }
@@ -124,14 +182,14 @@ FadePage {
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: Controller.tracks.length === 0 ? "No songs found" : "No results"
+                        text: "No songs found"
                         color: Theme.onSurfaceColor
                         font.pixelSize: 18
                     }
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: Controller.tracks.length === 0 ? "Put music in your Music folder" : "Nothing matches \"" + page.query.trim() + "\""
+                        text: "Put music in your Music folder"
                         color: Theme.onSurfaceVariantColor
                         font.pixelSize: 14
                     }

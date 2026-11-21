@@ -149,36 +149,54 @@ Column {
 
     Row {
         anchors.horizontalCenter: parent.horizontalCenter
-        spacing: 12
+        spacing: 28
 
-        MaterialChip {
-            id: shuffleChip
-            anchors.verticalCenter: parent.verticalCenter
-            label: "Shuffle"
-            type: MaterialChip.Filter
-            selected: Controller.shuffle
+        MaterialIconButton {
+            type: MaterialIconButton.Standard
+            sizeStyle: MaterialIconButton.Medium
+            iconSize: 28
+            iconSource: "../icons/shuffle.svg"
+            checked: Controller.shuffle
             color: "transparent"
-            selectedColor: Theme.secondaryContainer
-            contentColor: Theme.onSurfaceVariantColor
-            selectedContentColor: Theme.onSurfaceColor
-            borderColor: Theme.outline
-            onToggled: Controller.shuffle = shuffleChip.selected
+            checkedColor: Theme.secondaryContainer
+            iconColor: Theme.onSurfaceVariantColor
+            checkedIconColor: Theme.onSurfaceColor
+            onClicked: {
+                Controller.shuffle = !Controller.shuffle;
+                Store.set("shuffle", Controller.shuffle);
+            }
         }
 
-        MaterialButtonGroup {
-            id: repeatGroup
-            anchors.verticalCenter: parent.verticalCenter
-            labels: ["Off", "All", "One"]
-            variant: MaterialButtonGroup.Connected
-            sizeStyle: MaterialButtonGroup.ExtraSmall
-            selectionMode: MaterialButtonGroup.Single
-            currentIndex: Controller.repeatMode
-            color: Theme.surfaceContainer
-            textColor: Theme.onSurfaceColor
+        MaterialIconButton {
+            type: MaterialIconButton.Standard
+            sizeStyle: MaterialIconButton.Medium
+            iconSize: 28
+            iconSource: Controller.repeatMode === 2 ? "../icons/repeat_one.svg" : "../icons/repeat.svg"
+            checked: Controller.repeatMode > 0
+            color: "transparent"
             checkedColor: Theme.secondaryContainer
-            checkedTextColor: Theme.onSurfaceColor
-            onCheckedIndicesChanged: if (repeatGroup.currentIndex >= 0)
-                Controller.repeatMode = repeatGroup.currentIndex
+            iconColor: Theme.onSurfaceVariantColor
+            checkedIconColor: Theme.onSurfaceColor
+            onClicked: {
+                Controller.repeatMode = (Controller.repeatMode + 1) % 3;
+                Store.set("repeatMode", Controller.repeatMode);
+            }
+        }
+
+        MaterialIconButton {
+            type: MaterialIconButton.Standard
+            sizeStyle: MaterialIconButton.Medium
+            iconSize: 28
+            iconSource: "../icons/auto_next.svg"
+            checked: Controller.autoNext
+            color: "transparent"
+            checkedColor: Theme.secondaryContainer
+            iconColor: Theme.onSurfaceVariantColor
+            checkedIconColor: Theme.onSurfaceColor
+            onClicked: {
+                Controller.autoNext = !Controller.autoNext;
+                Store.set("autoNext", Controller.autoNext);
+            }
         }
     }
 }

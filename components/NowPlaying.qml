@@ -15,6 +15,22 @@ Rectangle {
     property bool swiping: false
     property bool snapping: false
     property real lastVx: 0
+    readonly property var shapePool: [MaterialShape.Cookie9Sided, MaterialShape.Cookie12Sided, MaterialShape.Cookie6Sided, MaterialShape.Clover4Leaf, MaterialShape.Clover8Leaf, MaterialShape.SoftBurst, MaterialShape.Flower, MaterialShape.Puffy, MaterialShape.PuffyDiamond, MaterialShape.Sunny, MaterialShape.VerySunny, MaterialShape.Pentagon, MaterialShape.Gem, MaterialShape.Ghostish, MaterialShape.Bun, MaterialShape.Heart, MaterialShape.Oval]
+    property int coverShape: MaterialShape.Cookie9Sided
+
+    function pickShape() {
+        let n = coverShape;
+        while (n === coverShape)
+            n = shapePool[Math.floor(Math.random() * shapePool.length)];
+        coverShape = n;
+    }
+
+    Connections {
+        target: Controller
+        function onCurrentChanged() {
+            root.pickShape();
+        }
+    }
 
     readonly property int miniHeight: 76
     readonly property int miniMargin: 12
@@ -147,7 +163,7 @@ Rectangle {
         height: width
         rotation: root.swipeT * 30 * root.p
         scale: 1 - 0.12 * Math.min(1, Math.abs(root.swipeT))
-        shape: Controller.playing ? MaterialShape.Cookie9Sided : MaterialShape.Circle
+        shape: Controller.playing ? root.coverShape : MaterialShape.Circle
         color: Theme.secondaryContainer
         image: Controller.info.cover
         glyph: Controller.info.hasCover ? "" : "\u266A"

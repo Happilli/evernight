@@ -5,12 +5,53 @@ import Evernight
 FadePage {
     id: page
 
-    Component.onCompleted: {
-        const m = Number(Store.get("themeMode", 0));
-        Theme.mode = m >= 0 && m <= 2 ? m : 0;
-        const a = Store.get("autoNext", true);
-        Controller.autoNext = a === true || a === "true";
+    component Divider: Rectangle {
+        width: parent ? parent.width : 0
+        height: 1
+        color: Theme.outlineVariant
     }
+
+    component SettingRow: Item {
+        id: row
+        property string title: ""
+        property string subtitle: ""
+        default property alias trailing: slot.data
+
+        width: parent ? parent.width : 0
+        height: 56
+
+        Column {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            width: row.width - slot.width - 16
+            spacing: 2
+
+            Text {
+                width: parent.width
+                text: row.title
+                elide: Text.ElideRight
+                color: Theme.onSurfaceColor
+                font.pixelSize: 16
+            }
+
+            Text {
+                width: parent.width
+                text: row.subtitle
+                elide: Text.ElideRight
+                color: Theme.onSurfaceVariantColor
+                font.pixelSize: 13
+            }
+        }
+
+        Item {
+            id: slot
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: childrenRect.width
+            height: childrenRect.height
+        }
+    }
+
     Connections {
         target: Controller.discord
         function onAuthRequired() {
@@ -25,7 +66,7 @@ FadePage {
         anchors.rightMargin: 20
         clip: true
         contentWidth: width
-        contentHeight: col.height + 24 + (Controller.current >= 0 ? 120 : 32)
+        contentHeight: col.height + 24 + 16
         flickableDirection: Flickable.VerticalFlick
         boundsBehavior: Flickable.StopAtBounds
         onDraggingVerticallyChanged: {
@@ -68,126 +109,35 @@ FadePage {
                 }
             }
 
-            Rectangle {
-                width: parent.width
-                height: 1
-                color: Theme.outlineVariant
-            }
+            Divider {}
 
-            Item {
-                width: parent.width
-                height: 56
-
-                Column {
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 2
-                    Text {
-                        text: "Auto-play next"
-                        color: Theme.onSurfaceColor
-                        font.pixelSize: 16
-                    }
-                    Text {
-                        text: "Continue with the next song when one ends"
-                        color: Theme.onSurfaceVariantColor
-                        font.pixelSize: 13
-                    }
-                }
-
-                MaterialSwitch {
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    checked: Controller.autoNext
-                    trackColor: Theme.surfaceContainerHighest
-                    handleColor: Theme.outline
-                    checkedTrackColor: Theme.onSurfaceColor
-                    checkedHandleColor: Theme.onPrimaryColor
-                    borderColor: checked ? "transparent" : Theme.outline
-                    onToggled: {
-                        Controller.autoNext = checked;
-                        Store.set("autoNext", checked);
-                    }
-                }
-            }
-
-            Rectangle {
-                width: parent.width
-                height: 1
-                color: Theme.outlineVariant
-            }
-
-            Item {
-                width: parent.width
-                height: 56
-
-                Column {
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 2
-                    Text {
-                        text: "Discord Rich Presence"
-                        color: Theme.onSurfaceColor
-                        font.pixelSize: 16
-                    }
-                    Text {
-                        text: Controller.discord.connected ? "Connected" : (Controller.discord.enabled ? (Controller.discord.hasToken() ? "Connecting…" : "Authorization required") : "Show what you're listening to")
-                        color: Theme.onSurfaceVariantColor
-                        font.pixelSize: 13
-                    }
-                }
-
-                MaterialSwitch {
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    checked: Controller.discord.enabled
-                    trackColor: Theme.surfaceContainerHighest
-                    handleColor: Theme.outline
-                    checkedTrackColor: Theme.onSurfaceColor
-                    checkedHandleColor: Theme.onPrimaryColor
-                    borderColor: checked ? "transparent" : Theme.outline
-                    onToggled: {
-                        Controller.discord.enabled = checked;
-                        Store.set("discord", checked);
-                        if (checked && !Controller.discord.hasToken())
-                            Controller.discord.login();
-                    }
-                }
-            }
-
-            Rectangle {
-                width: parent.width
-                height: 1
-                color: Theme.outlineVariant
-            }
-
-            Item {
-                width: parent.width
-                height: 56
-
-                Column {
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 2
-                    Text {
-                        text: "Library"
-                        color: Theme.onSurfaceColor
-                        font.pixelSize: 16
-                    }
-                    Text {
-                        text: Controller.tracks.length + " songs"
-                        color: Theme.onSurfaceVariantColor
-                        font.pixelSize: 13
-                    }
+            SettingRow {
+                title: "Discord Rich Presence"
+                subtitle: {
+                    if (Controller.discord.connected)
+                        return "Connected";
+                    if (!Controller.discord.enabled)
+                        return "Show what you're listening to";
+                    return Controller.discord.hasToken() ? "Connecting…" : "Waiting for authorization…";
                 }
 
                 MaterialButton {
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    label: "Rescan"
-                    type: MaterialButton.Tonal
+                    label: Controller.discord.enabled ? "Disconnect" : "Connect"
+                    type: Controller.discord.enabled ? MaterialButton.Text : MaterialButton.Tonal
                     color: Theme.surfaceContainer
                     contentColor: Theme.onSurfaceColor
-                    onClicked: Controller.scanLibrary()
+                    onClicked: {
+                        if (Controller.discord.enabled) {
+                            Controller.discord.logout();
+                            Controller.discord.enabled = false;
+                            Store.set("discord", false);
+                        } else {
+                            Controller.discord.enabled = true;
+                            Store.set("discord", true);
+                            if (!Controller.discord.hasToken())
+                                Controller.discord.login();
+                        }
+                    }
                 }
             }
         }

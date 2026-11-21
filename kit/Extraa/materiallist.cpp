@@ -13,6 +13,7 @@
 #include <QQuickWindow>
 #include <QStringList>
 #include <QThreadPool>
+#include <QTimer>
 #include <algorithm>
 #include <cmath>
 
@@ -468,6 +469,8 @@ void MaterialList::mousePressEvent(QMouseEvent *e) {
   animate();
   m_held = false;
   m_holdTimer.start();
+  m_pressClock.restart();
+  QTimer::singleShot(100, this, [this] { update(); });
   update();
   e->accept();
 }
@@ -487,8 +490,14 @@ void MaterialList::mouseReleaseEvent(QMouseEvent *e) {
   animate();
   const bool inside = rowAt(e->position()) == pressed;
   update();
-  if (inside)
+  if (inside) {
+    m_flashIndex = pressed;
+    QTimer::singleShot(120, this, [this] {
+      m_flashIndex = -1;
+      update();
+    });
     activate(pressed);
+  }
   e->accept();
 }
 
@@ -511,7 +520,6 @@ void MaterialList::build(Kit::Mesh &m) {
   if (!visibleRows(first, last))
     return;
   last = std::min(last, first + kWindow - 1);
-
   const qreal dpr = m.dpr();
   const qreal fd = fade();
   const qreal w = width();
@@ -529,19 +537,15 @@ void MaterialList::build(Kit::Mesh &m) {
       m_iconColor.isValid() ? m_iconColor : m_supportingColor;
   const bool slide = m_mode == Single;
   const qreal ha = std::clamp(m_hlA.x, 0.0, 1.0);
-
   if (slide && ha > 0.001)
     m.fillRoundedRect(
         QRectF(0.0, m_hlY.x, w, std::max(0.0, m_hlH.x)), kOuterR, kOuterR,
         kOuterR, kOuterR,
         Kit::withAlpha(m_selectedColor, m_selectedColor.alphaF() * ha));
-
   QSet<QString> wanted;
-
   for (int i = first; i <= last; ++i) {
     Entry &e = m_items[i];
     const QRectF r(0.0, m_tops[i], w, m_hts[i]);
-
     if (e.divider) {
       if (m_variant == Standard) {
         const qreal y = std::floor(r.center().y()) + 0.5;
@@ -550,13 +554,11 @@ void MaterialList::build(Kit::Mesh &m) {
       }
       continue;
     }
-
     const bool checked = isChecked(i);
     const qreal dim = e.enabled ? 1.0 : Kit::kDisabledOpacity;
     auto d = [dim](const QColor &c) {
       return Kit::withAlpha(c, c.alphaF() * dim);
     };
-
     qreal rt = kOuterR, rb = kOuterR;
     if (m_variant == Segmented) {
       const bool isFirst = i == 0 || m_items[i - 1].divider;
@@ -569,25 +571,21 @@ void MaterialList::build(Kit::Mesh &m) {
         rb += (kOuterR - rb) * t;
       }
     }
-
     const QColor bg = (checked && !slide) ? m_selectedColor : base;
     const QColor fg = checked ? m_selectedTextColor : m_textColor;
     const QColor sup = checked ? m_selectedTextColor : m_supportingColor;
     const QColor ic = checked ? m_selectedTextColor : iconBase;
-
     if (bg.alpha() > 0)
       m.fillRoundedRect(r, rt, rt, rb, rb, d(bg));
-
-    if (m_pressIndex == i)
+    if ((m_pressIndex == i && m_pressClock.elapsed() >= 100) ||
+        m_flashIndex == i)
       m.fillRoundedRect(r, rt, rt, rb, rb,
                         d(Kit::withAlpha(fg, Kit::kPressLayer)));
-
     const int slot = (i % kWindow) * kSlots;
     const qreal cy = r.center().y();
     qreal xl = r.left() + kPad;
     qreal xr = r.right() - kPad;
     const bool hasImage = !e.imagePath.isEmpty();
-
     if (i == m_eqIndex) {
       const qreal S = hasImage ? kImage : kAvatar;
       const qreal rad = hasImage ? kImageR : S / 2.0;
@@ -648,7 +646,6 @@ void MaterialList::build(Kit::Mesh &m) {
                  QPointF(xl + kIcon / 2.0, cy), kIcon);
       xl += kIcon + kGap;
     }
-
     bool hasTrailing = false;
     if (!e.trailingIcon.isEmpty()) {
       glyphLayer(slot + kSlotTrailingIcon, m_iconFont, e.trailingIcon, d(ic),
@@ -667,7 +664,6 @@ void MaterialList::build(Kit::Mesh &m) {
     }
     if (hasTrailing)
       xr -= kGap;
-
     const qreal avail = std::max(0.0, xr - xl);
     if (e.eGen != m_fontGen || e.eAvail != avail) {
       e.eGen = m_fontGen;
@@ -682,7 +678,6 @@ void MaterialList::build(Kit::Mesh &m) {
                    ? QString()
                    : supM.elidedText(e.supporting, Qt::ElideRight, avail);
     }
-
     struct Line {
       int slot;
       const QString *s;
@@ -698,7 +693,6 @@ void MaterialList::build(Kit::Mesh &m) {
       lines[ln++] = {kSlotHeadline, &e.eHead, &headF, kHeadlineLh, fg};
     if (!e.supporting.isEmpty())
       lines[ln++] = {kSlotSupporting, &e.eSup, &supF, kSupportLh, sup};
-
     qreal total = 0.0;
     for (int k = 0; k < ln; ++k)
       total += lines[k].lh;
@@ -709,7 +703,6 @@ void MaterialList::build(Kit::Mesh &m) {
       y += lines[k].lh;
     }
   }
-
   QMutexLocker lock(&m_wanted->m);
   m_wanted->s = std::move(wanted);
 }

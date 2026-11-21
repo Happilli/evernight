@@ -3,7 +3,7 @@ import Evernight.Extraa
 import Evernight
 
 MaterialTabs {
-    labels: ["Songs", "Playlists", "Settings"]
+    labels: ["Home", "Playlists", "Settings"]
     type: MaterialTabs.Primary
     springDamping: 1.0
     activeColor: Theme.onSurfaceColor
