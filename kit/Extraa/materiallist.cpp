@@ -37,8 +37,17 @@ constexpr qreal kEqBarW = 4.0;
 constexpr qreal kEqBarGap = 3.0;
 constexpr qreal kEqMinH = 4.0;
 constexpr qreal kBuffer = 160.0;
+constexpr qreal kLabelW = 88.0;
+constexpr qreal kDetailGap = 12.0;
+constexpr qreal kDetailLh = 20.0;
+constexpr qreal kDetailRowGap = 4.0;
+constexpr qreal kDetailTop = 4.0;
+constexpr qreal kDetailBottom = 12.0;
+constexpr int kDetailMaxLines = 3;
 constexpr int kWindow = 64;
 constexpr int kSlots = 8;
+constexpr int kDetailBase = kWindow * kSlots;
+constexpr int kDetailSlots = 160;
 constexpr int kSlotImage = 0;
 constexpr int kSlotAvatar = 1;
 constexpr int kSlotLeading = 2;
@@ -58,6 +67,44 @@ QThreadPool &thumbPool() {
   static const bool init = (pool.setMaxThreadCount(2), true);
   Q_UNUSED(init)
   return pool;
+}
+
+QStringList wrapText(const QFontMetricsF &fm, const QString &text, qreal w,
+                     int maxLines) {
+  if (w <= 8.0)
+    return QStringList{text};
+  QStringList out;
+  QString cur;
+  const QStringList words = text.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+  for (QString word : words) {
+    if (!cur.isEmpty()) {
+      const QString t = cur + QLatin1Char(' ') + word;
+      if (fm.horizontalAdvance(t) <= w) {
+        cur = t;
+        continue;
+      }
+      out << cur;
+      cur.clear();
+    }
+    while (fm.horizontalAdvance(word) > w && word.size() > 1) {
+      int k = 1;
+      while (k < word.size() - 1 && fm.horizontalAdvance(word.left(k + 1)) <= w)
+        ++k;
+      out << word.left(k);
+      word = word.mid(k);
+    }
+    cur = word;
+  }
+  if (!cur.isEmpty())
+    out << cur;
+  if (out.isEmpty())
+    out << QString();
+  if (out.size() > maxLines) {
+    out = out.mid(0, maxLines);
+    out.last() =
+        fm.elidedText(out.last() + QStringLiteral("\u2026"), Qt::ElideRight, w);
+  }
+  return out;
 }
 
 QImage loadThumb(const QString &path, int px, qreal dpr) {
@@ -146,8 +193,17 @@ void MaterialList::itemChange(ItemChange change, const ItemChangeData &data) {
 
 void MaterialList::geometryChange(const QRectF &n, const QRectF &o) {
   QQuickItem::geometryChange(n, o);
-  if (n.size() != o.size())
-    update();
+  if (n.size() == o.size())
+    return;
+  if (n.width() != o.width()) {
+    for (int i = 0; i < int(m_items.size()); ++i) {
+      if (!m_items[i].open)
+        continue;
+      m_items[i].dW = -1.0;
+      retargetExtra(i);
+    }
+  }
+  update();
 }
 
 QColor MaterialList::resolvedItemColor() const {
@@ -160,11 +216,168 @@ qreal MaterialList::itemGap() const {
   return m_variant == Segmented ? kSegGap : 0.0;
 }
 
-qreal MaterialList::rowHeight(int i) const {
+qreal MaterialList::baseHeight(int i) const {
   const Entry &e = m_items[i];
   if (e.divider)
     return m_variant == Segmented ? kSegDivider : kDivider;
   return kHeight[std::min(e.lines(), 3)];
+}
+
+qreal MaterialList::rowHeight(int i) const {
+  const Entry &e = m_items[i];
+  if (e.divider)
+    return baseHeight(i);
+  return baseHeight(i) + std::max(0.0, e.ext.x);
+}
+
+qreal MaterialList::leadingWidth(int i) const {
+  const Entry &e = m_items[i];
+  const bool hasImage = !e.imagePath.isEmpty();
+  if (i == m_eqIndex)
+    return (hasImage ? kImage : kAvatar) + kGap;
+  if (hasImage)
+    return kImage + kGap;
+  if (!e.avatarText.isEmpty())
+    return kAvatar + kGap;
+  if (!e.leadingIcon.isEmpty())
+    return kIcon + kGap;
+  return 0.0;
+}
+
+bool MaterialList::canExpand(int i) const {
+  return m_expandable && i >= 0 && i < int(m_items.size()) &&
+         !m_items[i].divider && m_items[i].enabled;
+}
+
+void MaterialList::ensureDetail(int i) {
+  Entry &e = m_items[i];
+  const qreal avail = std::max(0.0, width() - kPad - leadingWidth(i) - kPad);
+  if (e.dGen == m_fontGen && e.dW == avail)
+    return;
+  const QFont f = Kit::styledFont(m_font, 14.0, QFont::Normal);
+  const QFontMetricsF fm(f);
+  e.dRows.clear();
+  if (e.details.empty()) {
+    DetailRow r;
+    r.lines << (e.loading ? QStringLiteral("Loading...")
+                          : QStringLiteral("No details"));
+    e.dRows.push_back(r);
+  } else {
+    const qreal vw = std::max(0.0, avail - kLabelW - kDetailGap);
+    for (const Detail &d : e.details) {
+      DetailRow r;
+      r.label = fm.elidedText(d.label, Qt::ElideRight, kLabelW);
+      r.lines = wrapText(fm, d.value, vw, kDetailMaxLines);
+      e.dRows.push_back(r);
+    }
+  }
+  qreal h = kDetailTop + kDetailBottom;
+  for (size_t k = 0; k < e.dRows.size(); ++k) {
+    h += e.dRows[k].lines.size() * kDetailLh;
+    if (k > 0)
+      h += kDetailRowGap;
+  }
+  e.dExtra = h;
+  e.dW = avail;
+  e.dGen = m_fontGen;
+}
+
+void MaterialList::retargetExtra(int i) {
+  Entry &e = m_items[i];
+  if (e.open)
+    ensureDetail(i);
+  e.ext.go(e.open ? e.dExtra : 0.0);
+  m_extBusy = true;
+  animate();
+  update();
+}
+
+int MaterialList::expandedIndex() const {
+  for (int i = int(m_items.size()) - 1; i >= 0; --i)
+    if (m_items[i].open)
+      return i;
+  return -1;
+}
+
+void MaterialList::openRow(int i, bool on) {
+  if (i < 0 || i >= int(m_items.size()))
+    return;
+  const int before = expandedIndex();
+  Entry &e = m_items[i];
+  bool need = false;
+  if (on) {
+    if (!canExpand(i) || e.open)
+      return;
+    if (m_accordion) {
+      for (int k = 0; k < int(m_items.size()); ++k) {
+        if (k == i || !m_items[k].open)
+          continue;
+        m_items[k].open = false;
+        retargetExtra(k);
+      }
+    }
+    e.open = true;
+    need = e.details.empty();
+    if (need) {
+      e.loading = true;
+      e.dW = -1.0;
+    }
+  } else {
+    if (!e.open)
+      return;
+    e.open = false;
+  }
+  retargetExtra(i);
+  if (expandedIndex() != before)
+    emit expandedIndexChanged();
+  if (need)
+    emit expandRequested(i, m_raw.value(i));
+}
+
+void MaterialList::toggleExpanded(int i) {
+  if (i < 0 || i >= int(m_items.size()))
+    return;
+  openRow(i, !m_items[i].open);
+}
+
+void MaterialList::collapseAll() {
+  for (int i = 0; i < int(m_items.size()); ++i)
+    openRow(i, false);
+}
+
+void MaterialList::setDetails(int index, const QVariantList &rows) {
+  if (index < 0 || index >= int(m_items.size()))
+    return;
+  Entry &e = m_items[index];
+  e.details.clear();
+  for (const QVariant &v : rows) {
+    const QVariantMap dm = v.toMap();
+    const QString val = dm.value("value").toString();
+    if (val.trimmed().isEmpty())
+      continue;
+    e.details.push_back({dm.value("label").toString(), val});
+  }
+  e.loading = false;
+  e.dW = -1.0;
+  if (e.open)
+    retargetExtra(index);
+  update();
+}
+
+void MaterialList::setExpandable(bool v) {
+  if (assign(m_expandable, v, &MaterialList::expandableChanged) && !v)
+    collapseAll();
+}
+
+void MaterialList::setAccordion(bool v) {
+  assign(m_accordion, v, &MaterialList::accordionChanged);
+}
+
+void MaterialList::setExpandedIndex(int i) {
+  if (i < 0)
+    collapseAll();
+  else
+    openRow(i, true);
 }
 
 void MaterialList::relayout() {
@@ -317,17 +530,28 @@ bool MaterialList::advance(qreal dt) {
   active |= Kit::stepSpring(m_hlY, springStiffness(), 1.0, dt, 0.05);
   active |= Kit::stepSpring(m_hlH, springStiffness(), 1.0, dt, 0.05);
   active |= Kit::stepSpring(m_hlA, springStiffness(), 1.0, dt, 0.001);
+  if (m_extBusy) {
+    bool any = false;
+    for (Entry &e : m_items)
+      any |= step(e.ext, dt, 0.05);
+    m_extBusy = any;
+    relayout();
+    active |= any;
+  }
   if (!active && m_press.t == 0.0)
     m_pressShown = -1;
   return active;
 }
 
 void MaterialList::setModel(const QVariantList &v) {
+  const int expandedBefore = expandedIndex();
   m_raw = v;
   m_items.clear();
   m_items.reserve(size_t(v.size()));
+  m_extBusy = false;
   for (const QVariant &it : v) {
     Entry e;
+    e.expandedIcon = QStringLiteral("\u2715");
     if (it.metaType().id() == QMetaType::QString) {
       const QString s = it.toString();
       if (s == QLatin1String("-") || s == QLatin1String("---"))
@@ -343,6 +567,8 @@ void MaterialList::setModel(const QVariantList &v) {
       e.trailingText = m.value("trailingText").toString();
       e.leadingIcon = m.value("leadingIcon").toString();
       e.trailingIcon = m.value("trailingIcon").toString();
+      if (m.contains("expandedIcon"))
+        e.expandedIcon = m.value("expandedIcon").toString();
       e.avatarText = m.value("avatarText").toString();
       e.enabled = m.contains("enabled") ? m.value("enabled").toBool() : true;
       const QString img = m.value("image").toString();
@@ -350,6 +576,14 @@ void MaterialList::setModel(const QVariantList &v) {
         e.imagePath = img.startsWith(QLatin1Char('/'))
                           ? img
                           : Kit::resolveUrl(qmlContext(this), QUrl(img));
+      const QVariantList dl = m.value("details").toList();
+      for (const QVariant &dv : dl) {
+        const QVariantMap dm = dv.toMap();
+        const QString val = dm.value("value").toString();
+        if (val.trimmed().isEmpty())
+          continue;
+        e.details.push_back({dm.value("label").toString(), val});
+      }
     }
     m_items.push_back(std::move(e));
   }
@@ -359,6 +593,8 @@ void MaterialList::setModel(const QVariantList &v) {
   emit modelChanged();
   if (before != m_checked)
     emit checkedIndicesChanged();
+  if (expandedBefore >= 0)
+    emit expandedIndexChanged();
 }
 
 void MaterialList::setVariant(Variant v) {
@@ -468,6 +704,11 @@ void MaterialList::mousePressEvent(QMouseEvent *e) {
     e->ignore();
     return;
   }
+  if (e->position().y() - m_tops[i] > baseHeight(i) + 0.5) {
+    m_pressIndex = -1;
+    e->accept();
+    return;
+  }
   m_pressIndex = i;
   m_pressShown = i;
   m_press.go(1.0);
@@ -496,7 +737,10 @@ void MaterialList::mouseReleaseEvent(QMouseEvent *e) {
   const bool inside = rowAt(e->position()) == pressed;
   update();
   if (inside && !m_items[pressed].trailingIcon.isEmpty() &&
-      e->position().x() >= width() - kPad - kIcon - 12.0) {
+      e->position().x() >= width() - kPad - kIcon - 12.0 &&
+      e->position().y() - m_tops[pressed] <= baseHeight(pressed)) {
+    if (m_expandable)
+      toggleExpanded(pressed);
     QMetaObject::invokeMethod(
         this,
         [this, pressed] {
@@ -516,6 +760,7 @@ void MaterialList::mouseReleaseEvent(QMouseEvent *e) {
   }
   e->accept();
 }
+
 void MaterialList::mouseUngrabEvent() {
   m_holdTimer.stop();
   m_held = false;
@@ -558,6 +803,7 @@ void MaterialList::build(Kit::Mesh &m) {
         kOuterR, kOuterR,
         Kit::withAlpha(m_selectedColor, m_selectedColor.alphaF() * ha));
   QSet<QString> wanted;
+  int dslot = kDetailBase;
   for (int i = first; i <= last; ++i) {
     Entry &e = m_items[i];
     const QRectF r(0.0, m_tops[i], w, m_hts[i]);
@@ -569,6 +815,13 @@ void MaterialList::build(Kit::Mesh &m) {
       }
       continue;
     }
+    const qreal baseH = baseHeight(i);
+    const qreal extH = std::max(0.0, e.ext.x);
+    if (e.open || extH > 0.5)
+      ensureDetail(i);
+    const qreal ex = (e.dExtra > 0.0 && extH > 0.0)
+                         ? std::clamp(extH / e.dExtra, 0.0, 1.0)
+                         : 0.0;
     const bool checked = isChecked(i);
     const qreal dim = e.enabled ? 1.0 : Kit::kDisabledOpacity;
     auto d = [dim](const QColor &c) {
@@ -592,12 +845,16 @@ void MaterialList::build(Kit::Mesh &m) {
     const QColor ic = checked ? m_selectedTextColor : iconBase;
     if (bg.alpha() > 0)
       m.fillRoundedRect(r, rt, rt, rb, rb, d(bg));
+    if (extH > 0.5)
+      m.fillRoundedRect(r, rt, rt, rb, rb,
+                        d(Kit::withAlpha(m_supportingColor, 0.08 * ex)));
     if ((m_pressIndex == i && m_pressClock.elapsed() >= 100) ||
         m_flashIndex == i)
-      m.fillRoundedRect(r, rt, rt, rb, rb,
+      m.fillRoundedRect(QRectF(r.left(), r.top(), w, baseH), rt, rt,
+                        rb * (1.0 - ex), rb * (1.0 - ex),
                         d(Kit::withAlpha(fg, Kit::kPressLayer)));
     const int slot = (i % kWindow) * kSlots;
-    const qreal cy = r.center().y();
+    const qreal cy = r.top() + baseH / 2.0;
     qreal xl = r.left() + kPad;
     qreal xr = r.right() - kPad;
     const bool hasImage = !e.imagePath.isEmpty();
@@ -663,7 +920,11 @@ void MaterialList::build(Kit::Mesh &m) {
     }
     bool hasTrailing = false;
     if (!e.trailingIcon.isEmpty()) {
-      glyphLayer(slot + kSlotTrailingIcon, m_iconFont, e.trailingIcon, d(ic),
+      const QString glyph =
+          (m_expandable && e.open && !e.expandedIcon.isEmpty())
+              ? e.expandedIcon
+              : e.trailingIcon;
+      glyphLayer(slot + kSlotTrailingIcon, m_iconFont, glyph, d(ic),
                  QPointF(xr - kIcon / 2.0, cy), kIcon);
       xr -= kIcon;
       hasTrailing = true;
@@ -716,6 +977,36 @@ void MaterialList::build(Kit::Mesh &m) {
       textLayer(slot + lines[k].slot, *lines[k].f, *lines[k].s, d(lines[k].c),
                 xl, y + lines[k].lh / 2.0);
       y += lines[k].lh;
+    }
+    if (extH > 0.5 && !e.dRows.empty()) {
+      const qreal a = std::clamp((ex - 0.2) / 0.8, 0.0, 1.0);
+      if (a > 0.0) {
+        auto da = [dim, a](const QColor &c) {
+          return Kit::withAlpha(c, c.alphaF() * dim * a);
+        };
+        const qreal dx = r.left() + kPad + leadingWidth(i);
+        const qreal vx = dx + kLabelW + kDetailGap;
+        const qreal limit = r.bottom() - 2.0;
+        const int slotEnd = kDetailBase + kDetailSlots;
+        qreal dy = r.top() + baseH + kDetailTop;
+        for (size_t k = 0; k < e.dRows.size(); ++k) {
+          const DetailRow &dr = e.dRows[k];
+          if (k > 0)
+            dy += kDetailRowGap;
+          const bool plain = dr.label.isEmpty();
+          if (!plain && dy + kDetailLh <= limit && dslot < slotEnd)
+            textLayer(dslot++, supF, dr.label, da(sup), dx,
+                      dy + kDetailLh / 2.0);
+          for (int l = 0; l < dr.lines.size(); ++l) {
+            const qreal ly = dy + l * kDetailLh;
+            if (ly + kDetailLh > limit || dslot >= slotEnd)
+              break;
+            textLayer(dslot++, supF, dr.lines[l], da(plain ? sup : fg),
+                      plain ? dx : vx, ly + kDetailLh / 2.0);
+          }
+          dy += dr.lines.size() * kDetailLh;
+        }
+      }
     }
   }
   QMutexLocker lock(&m_wanted->m);

@@ -9,6 +9,7 @@
 #include <QPointer>
 #include <QSet>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QVariant>
 #include <QVariantList>
@@ -28,6 +29,12 @@ class MaterialList : public SgMaterialItem {
                  setCheckedIndices NOTIFY checkedIndicesChanged)
   Q_PROPERTY(int currentIndex READ currentIndex WRITE setCurrentIndex NOTIFY
                  checkedIndicesChanged)
+  Q_PROPERTY(bool expandable READ expandable WRITE setExpandable NOTIFY
+                 expandableChanged)
+  Q_PROPERTY(
+      bool accordion READ accordion WRITE setAccordion NOTIFY accordionChanged)
+  Q_PROPERTY(int expandedIndex READ expandedIndex WRITE setExpandedIndex NOTIFY
+                 expandedIndexChanged)
   Q_PROPERTY(QFont font READ font WRITE setFont NOTIFY fontChanged)
   Q_PROPERTY(
       QFont iconFont READ iconFont WRITE setIconFont NOTIFY iconFontChanged)
@@ -70,6 +77,9 @@ public:
   int currentIndex() const {
     return m_checked.isEmpty() ? -1 : m_checked.first();
   }
+  bool expandable() const { return m_expandable; }
+  bool accordion() const { return m_accordion; }
+  int expandedIndex() const;
   QFont font() const { return m_font; }
   QFont iconFont() const { return m_iconFont; }
   QColor itemColor() const { return m_itemColor; }
@@ -89,6 +99,9 @@ public:
   void setSelectionMode(SelectionMode v);
   void setCheckedIndices(const QList<int> &v);
   void setCurrentIndex(int i);
+  void setExpandable(bool v);
+  void setAccordion(bool v);
+  void setExpandedIndex(int i);
   void setFont(const QFont &v);
   void setIconFont(const QFont &v);
   void setItemColor(const QColor &v);
@@ -105,14 +118,21 @@ public:
 
   Q_INVOKABLE bool isChecked(int i) const { return m_checked.contains(i); }
   Q_INVOKABLE void setChecked(int i, bool on);
+  Q_INVOKABLE void toggleExpanded(int i);
+  Q_INVOKABLE void collapseAll();
+  Q_INVOKABLE void setDetails(int index, const QVariantList &rows);
 
 signals:
   void trailingClicked(int index, const QVariant &item);
+  void expandRequested(int index, const QVariant &item);
   void longPressed(int index, const QVariant &item);
   void modelChanged();
   void variantChanged();
   void selectionModeChanged();
   void checkedIndicesChanged();
+  void expandableChanged();
+  void accordionChanged();
+  void expandedIndexChanged();
   void fontChanged();
   void iconFontChanged();
   void itemColorChanged();
@@ -139,6 +159,14 @@ protected:
   void mouseUngrabEvent() override;
 
 private:
+  struct Detail {
+    QString label;
+    QString value;
+  };
+  struct DetailRow {
+    QString label;
+    QStringList lines;
+  };
   struct Entry {
     QString overline;
     QString headline;
@@ -146,6 +174,7 @@ private:
     QString trailingText;
     QString leadingIcon;
     QString trailingIcon;
+    QString expandedIcon;
     QString avatarText;
     QString imagePath;
     QString eOver;
@@ -155,12 +184,19 @@ private:
     int eGen = -1;
     bool divider = false;
     bool enabled = true;
+    bool open = false;
+    bool loading = false;
+    std::vector<Detail> details;
+    std::vector<DetailRow> dRows;
+    qreal dW = -1.0;
+    qreal dExtra = 0.0;
+    int dGen = -1;
+    Kit::Spring ext;
     int lines() const {
       return int(!overline.isEmpty()) + int(!headline.isEmpty()) +
              int(!supporting.isEmpty());
     }
   };
-
   struct Wanted {
     QMutex m;
     QSet<QString> s;
@@ -168,7 +204,13 @@ private:
 
   QColor resolvedItemColor() const;
   qreal itemGap() const;
+  qreal baseHeight(int i) const;
   qreal rowHeight(int i) const;
+  qreal leadingWidth(int i) const;
+  bool canExpand(int i) const;
+  void ensureDetail(int i);
+  void retargetExtra(int i);
+  void openRow(int i, bool on);
   void relayout();
   void structureChanged();
   void syncHighlight();
@@ -186,6 +228,9 @@ private:
   Variant m_variant = Standard;
   SelectionMode m_mode = NoSelection;
   QList<int> m_checked;
+  bool m_expandable = false;
+  bool m_accordion = true;
+  bool m_extBusy = false;
   QFont m_font;
   QFont m_iconFont;
   QTimer m_holdTimer;

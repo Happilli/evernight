@@ -31,6 +31,7 @@ public:
   Q_INVOKABLE void stop() { m_player.stop(); }
 
   void attach(QAudioBufferOutput *o) { m_player.setAudioBufferOutput(o); }
+  std::unique_ptr<QFile> openDevice(const QUrl &url);
 
   QMediaMetaData metaData() const { return m_player.metaData(); }
   int status() const { return m_player.mediaStatus(); }
@@ -51,7 +52,6 @@ signals:
 
 private:
   bool fail(const QString &message);
-  std::unique_ptr<QFile> openDevice(const QUrl &url);
 
   QMediaPlayer m_player;
   QAudioOutput m_audio;
