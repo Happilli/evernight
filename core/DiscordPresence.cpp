@@ -1,5 +1,6 @@
 #include "./DiscordPresence.h"
 #include <QDateTime>
+#include <QHash>
 #include <QPointer>
 #include <QRegularExpression>
 #include <QSettings>
@@ -13,6 +14,7 @@
 #define DISCORDPP_IMPLEMENTATION
 #include <discordpp.h>
 #endif
+
 namespace {
 constexpr quint64 kAppId = 1573360530175823882ULL;
 const QString kRefreshKey = QStringLiteral("discord/refreshToken");
@@ -58,6 +60,7 @@ struct DiscordPresence::Impl {
     QString title, artist;
     qint64 start = 0, end = 0;
     bool valid = false;
+    bool paused = false;
   } pending;
   QString sentKey;
   qint64 sentStart = 0;
@@ -75,7 +78,6 @@ DiscordPresence::DiscordPresence(QObject *parent)
   d->debounce.setInterval(400);
   connect(&d->debounce, &QTimer::timeout, this, &DiscordPresence::flush);
   d->clearTimer.setSingleShot(true);
-  d->clearTimer.setInterval(2500);
   connect(&d->clearTimer, &QTimer::timeout, this, &DiscordPresence::clear);
 #ifdef Q_OS_ANDROID
   connect(&d->pump, &QTimer::timeout, this, [] { discordpp::RunCallbacks(); });
@@ -163,7 +165,7 @@ void DiscordPresence::login() {
       return;
     if (!r.Successful()) {
       const auto st = r.Status();
-      qWarning("Discord refresh failed: %s (status=%d)", r.Error().c_str(),
+      qWarning("Discord authorize failed: %s (status=%d)", r.Error().c_str(),
                int(st));
       if (st == discordpp::HttpStatusCode::BadRequest) {
         QSettings().remove(kRefreshKey);
@@ -188,6 +190,7 @@ void DiscordPresence::login() {
   });
 #endif
 }
+
 void DiscordPresence::resume() {
 #ifdef Q_OS_ANDROID
   const QString rt = QSettings().value(kRefreshKey).toString();
@@ -219,6 +222,7 @@ void DiscordPresence::resume() {
       });
 #endif
 }
+
 void DiscordPresence::adoptToken(const QString &access,
                                  const QString &refresh) {
 #ifdef Q_OS_ANDROID
@@ -254,16 +258,23 @@ void DiscordPresence::update(const QString &title, const QString &artist,
                              bool playing) {
   if (!m_enabled)
     return;
-  if (!playing || title.size() < 2) {
+  if (title.size() < 2) {
     d->debounce.stop();
     d->pending.valid = false;
-    d->clearTimer.start();
+    d->clearTimer.start(2500);
     return;
   }
-  d->clearTimer.stop();
+  if (playing && durationMs <= 0) {
+    d->debounce.stop();
+    return;
+  }
+  if (playing)
+    d->clearTimer.stop();
+  else
+    d->clearTimer.start(10 * 60 * 1000);
   const qint64 start = QDateTime::currentMSecsSinceEpoch() - positionMs;
-  d->pending = {title, artist, start, durationMs > 0 ? start + durationMs : 0,
-                true};
+  d->pending = {title, artist,  start, durationMs > 0 ? start + durationMs : 0,
+                true,  !playing};
   d->debounce.start();
 }
 
@@ -273,34 +284,51 @@ void DiscordPresence::flush() {
 #ifdef Q_OS_ANDROID
   const auto p = d->pending;
   const QString key = p.title + QChar(0) + p.artist;
-  if (key == d->sentKey && qAbs(p.start - d->sentStart) < 2500)
+  const QString sig = p.paused ? key + QChar(1) : key;
+  if (sig == d->sentKey && (p.paused || qAbs(p.start - d->sentStart) < 2500))
     return;
-  d->sentKey = key;
+  d->sentKey = sig;
   d->sentStart = p.start;
-  qInfo("Discord flush: %s - %s", qPrintable(p.title), qPrintable(p.artist));
+  qInfo("Discord flush: %s - %s%s", qPrintable(p.title), qPrintable(p.artist),
+        p.paused ? " (paused)" : "");
 
   auto client = d->client;
 
-  auto build = [p](const QString &image) {
+  auto build = [p](const QString &image, bool withSmall) {
     discordpp::Activity a;
     a.SetType(discordpp::ActivityTypes::Listening);
     a.SetName("Evernight");
     a.SetDetails(p.title.toStdString());
-    if (!p.artist.isEmpty()) {
+    if (p.paused) {
+      const QString s = p.artist.isEmpty()
+                            ? QStringLiteral("Paused")
+                            : p.artist + QStringLiteral(" \u2022 Paused");
+      a.SetState(s.toStdString());
+    } else if (!p.artist.isEmpty()) {
       a.SetState(p.artist.toStdString());
-      a.SetStatusDisplayType(discordpp::StatusDisplayTypes::State);
     }
-    discordpp::ActivityTimestamps ts;
-    ts.SetStart(uint64_t(p.start));
-    if (p.end > 0)
-      ts.SetEnd(uint64_t(p.end));
-    a.SetTimestamps(ts);
+    if (!p.artist.isEmpty())
+      a.SetStatusDisplayType(discordpp::StatusDisplayTypes::State);
+    if (!p.paused) {
+      discordpp::ActivityTimestamps ts;
+      ts.SetStart(uint64_t(p.start));
+      if (p.end > 0)
+        ts.SetEnd(uint64_t(p.end));
+      a.SetTimestamps(ts);
+    }
 
     discordpp::ActivityAssets assets;
-    if (!image.isEmpty())
+    bool hasAssets = false;
+    if (!image.isEmpty()) {
       assets.SetLargeImage(image.toStdString());
-    assets.SetSmallImage(kSmallImage);
-    a.SetAssets(assets);
+      hasAssets = true;
+    }
+    if (withSmall) {
+      assets.SetSmallImage(p.paused ? kIconImage : kSmallImage);
+      hasAssets = true;
+    }
+    if (hasAssets)
+      a.SetAssets(assets);
 
     discordpp::ActivityButton button;
     button.SetLabel(kButtonLabel);
@@ -308,19 +336,31 @@ void DiscordPresence::flush() {
     a.AddButton(button);
     return a;
   };
+
   auto send = [client, build](const QString &image) {
     client->UpdateRichPresence(
-        build(image), [client, build](discordpp::ClientResult r) {
+        build(image, true), [client, build, image](discordpp::ClientResult r) {
           if (r.Successful()) {
             qInfo("Discord presence sent");
             return;
           }
-          qWarning("Discord presence failed: %s, retrying without image",
+          qWarning("Discord presence failed: %s, retrying without small image",
                    r.Error().c_str());
-          client->UpdateRichPresence(build({}), [](discordpp::ClientResult r2) {
-            if (!r2.Successful())
-              qWarning("Discord presence failed: %s", r2.Error().c_str());
-          });
+          client->UpdateRichPresence(
+              build(image, false), [client, build](discordpp::ClientResult r2) {
+                if (r2.Successful()) {
+                  qInfo("Discord presence sent (no small image)");
+                  return;
+                }
+                qWarning("Discord presence failed: %s, retrying bare",
+                         r2.Error().c_str());
+                client->UpdateRichPresence(
+                    build({}, false), [](discordpp::ClientResult r3) {
+                      if (!r3.Successful())
+                        qWarning("Discord presence failed: %s",
+                                 r3.Error().c_str());
+                    });
+              });
         });
   };
 
@@ -337,15 +377,16 @@ void DiscordPresence::flush() {
   }
 
   QPointer<DiscordPresence> self(this);
-  fetchCover(this, p.title, p.artist, [self, key, send, fallback](QString art) {
-    if (!self)
-      return;
-    const QString image = art.isEmpty() ? fallback : art;
-    qInfo("Discord cover: %s", qPrintable(image));
-    self->d->covers.insert(key, image);
-    if (self->d->sentKey == key)
-      send(image);
-  });
+  fetchCover(this, p.title, p.artist,
+             [self, key, sig, send, fallback](QString art) {
+               if (!self)
+                 return;
+               const QString image = art.isEmpty() ? fallback : art;
+               qInfo("Discord cover: %s", qPrintable(image));
+               self->d->covers.insert(key, image);
+               if (self->d->sentKey == sig)
+                 send(image);
+             });
 #endif
 }
 
