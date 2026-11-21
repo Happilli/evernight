@@ -448,6 +448,7 @@ Controller::Controller(QObject *parent) : QObject(parent) {
 #endif
   m_recent = QSettings().value("recent").toStringList();
   connect(this, &Controller::tracksChanged, this, &Controller::recentChanged);
+  connect(this, &Controller::tracksChanged, this, &Controller::queueChanged);
   loadCache();
   restoreState();
   QTimer::singleShot(0, this, &Controller::scanLibrary);
@@ -625,6 +626,7 @@ void Controller::play(int index) {
 
 void Controller::playAt(int index) {
   m_queue.clear();
+  emit queueChanged();
   play(index);
 }
 
@@ -646,6 +648,7 @@ void Controller::playQueue(const QStringList &uris, int start) {
   if (queue.isEmpty())
     return;
   m_queue = queue;
+  emit queueChanged();
   play(queue[first >= 0 ? first : 0]);
 }
 
@@ -817,4 +820,26 @@ QVariantList Controller::search(const QString &query) {
   for (const auto &p : scored)
     out.append(p.second);
   return out;
+}
+QVariantList Controller::queue() const {
+  const int n = queueSize();
+  QVariantList out;
+  out.reserve(n);
+  for (int pos = 0; pos < n; ++pos) {
+    const int i = queueAt(pos);
+    if (i < 0 || i >= m_tracks.size())
+      continue;
+    const Track &t = m_tracks[i];
+    out.append(QVariantMap{{QStringLiteral("uri"), t.url.toString()},
+                           {QStringLiteral("title"), t.title},
+                           {QStringLiteral("artist"), t.artist},
+                           {QStringLiteral("thumb"), t.thumb}});
+  }
+  return out;
+}
+
+void Controller::playFromQueue(int pos) {
+  if (pos < 0 || pos >= queueSize())
+    return;
+  play(queueAt(pos));
 }
