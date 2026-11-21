@@ -613,17 +613,20 @@ void Controller::play(int index) {
   m_pendingSeek = -1;
   m_current = index;
   emit currentChanged();
-  const QString u = m_tracks[index].url.toString();
-  m_recent.removeAll(u);
-  m_recent.prepend(u);
-  while (m_recent.size() > 5)
-    m_recent.removeLast();
-  QSettings().setValue("recent", m_recent);
-  emit recentChanged();
   m_player.play();
-  saveState(true);
+  const QString u = m_tracks[index].url.toString();
+  QTimer::singleShot(400, this, [this, u] {
+    m_recent.removeAll(u);
+    m_recent.prepend(u);
+    while (m_recent.size() > 5)
+      m_recent.removeLast();
+    QSettings().setValue("recent", m_recent);
+    emit recentChanged();
+    if (m_current >= 0 && m_current < m_tracks.size() &&
+        m_tracks[m_current].url.toString() == u)
+      saveState(true);
+  });
 }
-
 void Controller::playAt(int index) {
   m_queue.clear();
   emit queueChanged();

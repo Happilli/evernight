@@ -4,7 +4,7 @@ import Evernight
 
 FadePage {
     id: page
-
+    property bool eqPaused: false
     property var matches: []
     property var recent: []
     property bool fromCarousel: false
@@ -19,6 +19,17 @@ FadePage {
         recent = Controller.recent;
     }
 
+    function playFromCarousel(i) {
+        fromCarousel = true;
+        Controller.playAt(i);
+        carouselHold.restart();
+    }
+
+    Timer {
+        id: carouselHold
+        interval: 900
+        onTriggered: page.fromCarousel = false
+    }
     Component.onCompleted: {
         refresh();
         refreshRecent();
@@ -105,11 +116,8 @@ FadePage {
                 const i = page.recent[index];
                 if (i === undefined || i === Controller.current)
                     return;
-                page.fromCarousel = true;
-                Controller.playAt(i);
-                page.fromCarousel = false;
+                page.playFromCarousel(i);
             }
-
             Timer {
                 id: settle
                 interval: 350
@@ -118,9 +126,7 @@ FadePage {
                     const i = page.recent[carousel.currentIndex];
                     if (i === undefined || i === Controller.current)
                         return;
-                    page.fromCarousel = true;
-                    Controller.playAt(i);
-                    page.fromCarousel = false;
+                    page.playFromCarousel(i);
                 }
             }
         }
@@ -167,7 +173,6 @@ FadePage {
                 dividerColor: Theme.outlineVariant
                 selectionMode: MaterialList.Single
                 equalizerIndex: page.shownCurrent
-                equalizerLevels: Controller.spectrum.levels
                 model: {
                     const t = Controller.tracks;
                     return page.matches.map(function (i) {
@@ -191,6 +196,12 @@ FadePage {
                 onExpandRequested: (index, item) => {
                     Controller.inspect(Controller.tracks[page.matches[index]].uri);
                 }
+            }
+            Binding {
+                target: songList
+                property: "equalizerLevels"
+                value: Controller.spectrum.levels
+                when: !page.eqPaused
             }
 
             Item {

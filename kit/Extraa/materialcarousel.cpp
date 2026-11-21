@@ -533,6 +533,21 @@ bool MaterialCarousel::advance(qreal dt) {
 }
 
 void MaterialCarousel::setModel(const QVariantList &v) {
+  auto keyOf = [](const Entry &e) {
+    return e.headline + QLatin1Char('\x1f') + e.supporting +
+           QLatin1Char('\x1f') + e.path;
+  };
+  QHash<QString, Entry> oldByKey;
+  QString oldFirst;
+  for (int i = 0; i < m_items.size(); ++i) {
+    const QString k = keyOf(m_items[i]);
+    if (i == 0)
+      oldFirst = k;
+    if (!m_items[i].loading && !m_items[i].image.isNull())
+      oldByKey.insert(k, m_items[i]);
+  }
+  const bool hadItems = !m_items.isEmpty();
+
   m_raw = v;
   m_items.clear();
   m_items.reserve(v.size());
@@ -556,12 +571,34 @@ void MaterialCarousel::setModel(const QVariantList &v) {
       if (!img.isEmpty())
         e.path = Kit::resolveUrl(qmlContext(this), QUrl(img));
     }
+    if (!e.path.isEmpty()) {
+      const auto it = oldByKey.constFind(keyOf(e));
+      if (it != oldByKey.constEnd()) {
+        e.image = it->image;
+        e.want = it->want;
+        e.rev = it->rev;
+      }
+    }
     m_items.append(e);
   }
   m_pressIndex = -1;
   m_layoutDirty = true;
+
+  const bool slideIn = hadItems && m_items.size() > 1 && !m_dragging &&
+                       keyOf(m_items[0]) != oldFirst &&
+                       keyOf(m_items[1]) == oldFirst;
+
   m_pos.go(0.0, true);
   m_current = 0;
+  if (slideIn) {
+    layoutItems();
+    if (m_maxF >= 1.0) {
+      m_pos.x = 1.0;
+      m_pos.v = 0.0;
+      m_pos.t = 0.0;
+      animate();
+    }
+  }
   update();
   emit modelChanged();
   emit currentIndexChanged();

@@ -82,6 +82,7 @@ Window {
         model: ObjectModel {
             HomePage {
                 id: homePage
+                eqPaused: np.p > 0.02
                 onSongLongPressed: (uri, title, artist, playlistId) => songSheet.openFor(uri, title, artist, playlistId)
             }
             PlaylistsPage {

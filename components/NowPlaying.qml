@@ -7,9 +7,7 @@ import QtQuick.Shapes
 
 Rectangle {
     id: root
-    signal queueRequested
 
-    property bool blocked: false
     property real p: 0
     property bool dragging: false
     property real startP: 0
@@ -18,8 +16,28 @@ Rectangle {
     property bool swiping: false
     property bool snapping: false
     property real lastVx: 0
+    property bool blocked: false
+
+    signal queueRequested
+
     readonly property var shapePool: [MaterialShape.Cookie9Sided, MaterialShape.Cookie12Sided, MaterialShape.Cookie6Sided, MaterialShape.Clover4Leaf, MaterialShape.Clover8Leaf, MaterialShape.SoftBurst, MaterialShape.Flower, MaterialShape.Puffy, MaterialShape.PuffyDiamond, MaterialShape.Sunny, MaterialShape.VerySunny, MaterialShape.Pentagon, MaterialShape.Gem, MaterialShape.Ghostish, MaterialShape.Bun, MaterialShape.Heart, MaterialShape.Oval]
     property int coverShape: MaterialShape.Cookie9Sided
+
+    property bool glowA: true
+    property color tintA: "transparent"
+    property color tintB: "transparent"
+
+    onRingColorChanged: {
+        if (glowA) {
+            tintB = ringColor;
+            glowA = false;
+        } else {
+            tintA = ringColor;
+            glowA = true;
+        }
+    }
+
+    Component.onCompleted: tintA = ringColor
 
     function pickShape() {
         let n = coverShape;
@@ -47,19 +65,21 @@ Rectangle {
     readonly property real artSize: Math.min(pw - 64, ph * 0.34, 300)
     readonly property real artTop: Math.max(60, (ph - artSize - 420) / 2)
     readonly property real controlsTop: artTop + artSize + 90
-    readonly property var track: Controller.current >= 0 && Controller.current < Controller.tracks.length ? Controller.tracks[Controller.current] : null
+    readonly property var track: {
+        const t = Controller.tracks;
+        const c = Controller.current;
+        return c >= 0 && c < t.length ? t[c] : null;
+    }
     readonly property string titleText: track ? (Controller.info.title || track.title) : ""
     readonly property string subText: track ? [Controller.info.artist || track.artist, Controller.info.album].filter(function (s) {
         return s !== "";
     }).join(" \u00B7 ") : ""
-
-    readonly property color ringTarget: {
+    readonly property color ringColor: {
         if (!Controller.info.hasCover)
             return "transparent";
         const a = Controller.info.accent;
         return Qt.hsla(Math.max(0, a.hslHue), Math.min(0.75, Math.max(0.35, a.hslSaturation)), Theme.dark ? 0.62 : 0.42, 1);
     }
-    property color ringColor: ringTarget
 
     function mix(a, b) {
         return a + (b - a) * p;
@@ -82,6 +102,14 @@ Rectangle {
         exitTimer.restart();
     }
 
+    function skip(dir) {
+        if (dir > 0 && Controller.player.position > 3000) {
+            Controller.prev();
+            return;
+        }
+        commitSwipe(dir);
+    }
+
     visible: Controller.current >= 0
     clip: true
     x: mix(miniMargin, 0)
@@ -94,22 +122,16 @@ Rectangle {
     Behavior on p {
         enabled: !root.dragging
         NumberAnimation {
-            duration: 320
-            easing.type: Easing.OutCubic
-        }
-    }
-
-    Behavior on ringColor {
-        ColorAnimation {
-            duration: 500
+            duration: 240
+            easing.type: Easing.OutQuart
         }
     }
 
     Behavior on swipeX {
         enabled: !root.swiping && !root.snapping
         SpringAnimation {
-            spring: 2.5
-            damping: 0.22
+            spring: 3.2
+            damping: 0.26
             epsilon: 0.5
         }
     }
@@ -117,7 +139,7 @@ Rectangle {
     Timer {
         id: exitTimer
         property int dir: 0
-        interval: 140
+        interval: 170
         onTriggered: {
             if (dir < 0)
                 Controller.next();
@@ -131,8 +153,8 @@ Rectangle {
     }
 
     MouseArea {
-        enabled: !root.blocked
         anchors.fill: parent
+        enabled: !root.blocked
         onClicked: if (root.p < 0.5)
             root.expand()
     }
@@ -163,53 +185,85 @@ Rectangle {
             root.p = Math.max(0, Math.min(1, root.startP - translation.y / root.dragTravel));
         }
     }
-    Shape {
-        id: glow
-        readonly property real side: root.artSize * 2.1
+
+    component GlowLayer: Shape {
+        id: g
+        property color tint: "transparent"
+        property real share: 0
+        property real expandP: 0
+        property real artSize: 0
+        property real artTop: 0
+        property real pw: 0
+        readonly property real side: artSize * 2.1
+
         width: side
         height: side
-        x: (root.pw - side) / 2 + root.swipeX * root.p
-        y: root.artTop + root.artSize / 2 - side / 2 + root.arcY * root.p
-        opacity: Math.max(0, root.p * 2 - 1)
-        visible: opacity > 0 && Controller.info.hasCover
-        preferredRendererType: Shape.CurveRenderer
+        x: (pw - side) / 2
+        y: artTop + artSize / 2 - side / 2
+        opacity: Math.max(0, expandP * 2 - 1) * share
+        visible: opacity > 0
+
+        Behavior on share {
+            NumberAnimation {
+                duration: 450
+                easing.type: Easing.InOutQuad
+            }
+        }
 
         ShapePath {
             strokeColor: "transparent"
             fillGradient: RadialGradient {
-                centerX: glow.side / 2
-                centerY: glow.side / 2
-                centerRadius: glow.side / 2
+                centerX: g.side / 2
+                centerY: g.side / 2
+                centerRadius: g.side / 2
                 focalX: centerX
                 focalY: centerY
                 GradientStop {
                     position: 0.0
-                    color: Qt.alpha(root.ringColor, 0.5)
+                    color: Qt.alpha(g.tint, 0.5)
                 }
                 GradientStop {
                     position: 0.5
-                    color: Qt.alpha(root.ringColor, 0.22)
+                    color: Qt.alpha(g.tint, 0.22)
                 }
                 GradientStop {
                     position: 1.0
-                    color: Qt.alpha(root.ringColor, 0.0)
+                    color: Qt.alpha(g.tint, 0.0)
                 }
             }
             startX: 0
             startY: 0
             PathLine {
-                x: glow.side
+                x: g.side
                 y: 0
             }
             PathLine {
-                x: glow.side
-                y: glow.side
+                x: g.side
+                y: g.side
             }
             PathLine {
                 x: 0
-                y: glow.side
+                y: g.side
             }
         }
+    }
+
+    GlowLayer {
+        tint: root.tintA
+        share: root.glowA ? 1 : 0
+        expandP: root.p
+        artSize: root.artSize
+        artTop: root.artTop
+        pw: root.pw
+    }
+
+    GlowLayer {
+        tint: root.tintB
+        share: root.glowA ? 0 : 1
+        expandP: root.p
+        artSize: root.artSize
+        artTop: root.artTop
+        pw: root.pw
     }
 
     MaterialShape {
@@ -347,16 +401,15 @@ Rectangle {
         x: 32
         y: root.controlsTop
         width: root.pw - 64
-        active: root.p > 0
+        active: root.visible
+        asynchronous: true
         opacity: Math.max(0, root.p * 2 - 1)
         visible: opacity > 0
         enabled: root.p > 0.6
-
         sourceComponent: NowPlayingControls {
             pw: root.pw
-            onQueueRequested: {
-                root.queueRequested();
-            }
+            onQueueRequested: root.queueRequested()
+            onSkipRequested: dir => root.skip(dir)
         }
     }
 }
