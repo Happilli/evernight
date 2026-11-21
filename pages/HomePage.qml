@@ -8,9 +8,9 @@ FadePage {
     property var matches: []
     property var recent: []
     property bool fromCarousel: false
+    property var infoCache: ({})
 
     signal songLongPressed(string uri, string title, string artist, string playlistId)
-    signal songInfoRequested(string uri, string title, string artist)
 
     function refresh() {
         matches = Controller.search("");
@@ -35,11 +35,26 @@ FadePage {
             if (!page.fromCarousel)
                 page.refreshRecent();
         }
+        function onInspected(uri, rows) {
+            if (rows.length > 0)
+                page.infoCache[uri] = rows;
+            const t = Controller.tracks;
+            for (let k = 0; k < page.matches.length; k++) {
+                if (t[page.matches[k]].uri === uri) {
+                    songList.setDetails(k, rows);
+                    break;
+                }
+            }
+        }
     }
 
     readonly property int shownCurrent: Controller.current >= 0 ? page.matches.indexOf(Controller.current) : -1
 
     function handleBack() {
+        if (songList.expandedIndex >= 0) {
+            songList.collapseAll();
+            return true;
+        }
         return false;
     }
 
@@ -135,9 +150,13 @@ FadePage {
             spacing: 0
 
             MaterialList {
+                id: songList
                 width: parent.width
                 visible: page.matches.length > 0
                 variant: MaterialList.Standard
+                expandable: true
+                accordion: true
+                springDamping: 0.8
                 selectedColor: Theme.secondaryContainer
                 textColor: Theme.onSurfaceColor
                 selectedTextColor: Theme.onSurfaceColor
@@ -157,7 +176,9 @@ FadePage {
                             supporting: t[i].artist,
                             image: t[i].thumb,
                             avatarText: "\u266A",
-                            trailingIcon: "\u24D8"
+                            trailingIcon: "\u22EE",
+                            expandedIcon: "\u00D7",
+                            details: page.infoCache[t[i].uri] || []
                         };
                     });
                 }
@@ -167,9 +188,8 @@ FadePage {
                     const t = Controller.tracks[page.matches[index]];
                     page.songLongPressed(t.uri, t.title, t.artist, "");
                 }
-                onTrailingClicked: (index, item) => {
-                    const t = Controller.tracks[page.matches[index]];
-                    page.songInfoRequested(t.uri, t.title, t.artist);
+                onExpandRequested: (index, item) => {
+                    Controller.inspect(Controller.tracks[page.matches[index]].uri);
                 }
             }
 

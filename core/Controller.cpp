@@ -1,15 +1,18 @@
 #include "./Controller.h"
 #include "./Store.h"
+#include <QDate>
 #include <QGuiApplication>
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QMediaFormat>
+#include <QMediaPlayer>
 #include <QRandomGenerator>
 #include <QSettings>
 #include <QThread>
 #include <QTimer>
 #include <QtGlobal>
-
+#include <memory>
 #ifdef Q_OS_ANDROID
 #include <QDir>
 #include <QFile>
@@ -79,6 +82,45 @@ int tokenScore(const QString &tok, const QStringList &words) {
     best = qMax(best, s);
   }
   return best;
+}
+
+QVariantList describe(const QMediaMetaData &m, qint64 durationMs) {
+  QVariantList rows;
+  auto add = [&rows](const QString &label, const QString &value) {
+    if (!value.trimmed().isEmpty())
+      rows.append(QVariantMap{{"label", label}, {"value", value.trimmed()}});
+  };
+  auto str = [&m](QMediaMetaData::Key k) { return m.stringValue(k); };
+  add("Title", str(QMediaMetaData::Title));
+  add("Artist", str(QMediaMetaData::ContributingArtist));
+  add("Album", str(QMediaMetaData::AlbumTitle));
+  add("Album artist", str(QMediaMetaData::AlbumArtist));
+  add("Genre", str(QMediaMetaData::Genre));
+  const QVariant track = m.value(QMediaMetaData::TrackNumber);
+  if (track.isValid() && track.toInt() > 0)
+    add("Track", QString::number(track.toInt()));
+  const QDate d = m.value(QMediaMetaData::Date).toDate();
+  if (d.isValid())
+    add("Year", QString::number(d.year()));
+  if (durationMs > 0) {
+    const int s = int(durationMs / 1000);
+    add("Duration", QStringLiteral("%1:%2").arg(s / 60).arg(s % 60, 2, 10,
+                                                            QLatin1Char('0')));
+  }
+  const QVariant codec = m.value(QMediaMetaData::AudioCodec);
+  if (codec.isValid())
+    add("Codec",
+        QMediaFormat::audioCodecName(QMediaFormat::AudioCodec(codec.toInt())));
+  const QVariant fmt = m.value(QMediaMetaData::FileFormat);
+  if (fmt.isValid())
+    add("Format",
+        QMediaFormat::fileFormatName(QMediaFormat::FileFormat(fmt.toInt())));
+  const QVariant br = m.value(QMediaMetaData::AudioBitRate);
+  if (br.isValid() && br.toInt() > 0)
+    add("Bitrate",
+        QString::number(br.toInt() / 1000) + QStringLiteral(" kbps"));
+  add("Comment", str(QMediaMetaData::Comment));
+  return rows;
 }
 
 #ifdef Q_OS_ANDROID
@@ -203,7 +245,28 @@ void requestPermissions(const QStringList &names) {
     env.checkAndClearExceptions();
   });
 }
-
+void trimBars(const QString &path) {
+  QImage img(path);
+  if (img.isNull())
+    return;
+  img = img.convertToFormat(QImage::Format_RGB32);
+  auto dark = [&](int y) {
+    const QRgb *l = reinterpret_cast<const QRgb *>(img.constScanLine(y));
+    for (int x = 0; x < img.width(); ++x)
+      if (qMax(qRed(l[x]), qMax(qGreen(l[x]), qBlue(l[x]))) > 16)
+        return false;
+    return true;
+  };
+  int top = 0, bot = img.height() - 1;
+  while (top < bot && dark(top))
+    ++top;
+  while (bot > top && dark(bot))
+    --bot;
+  const int h = bot - top + 1;
+  if (h == img.height() || h < img.height() / 2)
+    return;
+  img.copy(0, top, img.width(), h).save(path, "JPG", 90);
+}
 QString thumbFor(const QJniObject &ctx, qint64 id) {
   const QString dir =
       QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
@@ -213,7 +276,6 @@ QString thumbFor(const QJniObject &ctx, qint64 id) {
   if (QFile::exists(path))
     return path;
   QDir().mkpath(dir);
-
   QJniEnvironment env;
   QJniObject base = QJniObject::getStaticObjectField(
       "android/provider/MediaStore$Audio$Media", "EXTERNAL_CONTENT_URI",
@@ -231,7 +293,6 @@ QString thumbFor(const QJniObject &ctx, qint64 id) {
       uri.object(), size.object(), jobject(nullptr));
   if (env.checkAndClearExceptions() || !bitmap.isValid())
     return {};
-
   QJniObject format = QJniObject::getStaticObjectField(
       "android/graphics/Bitmap$CompressFormat", "JPEG",
       "Landroid/graphics/Bitmap$CompressFormat;");
@@ -246,6 +307,7 @@ QString thumbFor(const QJniObject &ctx, qint64 id) {
   out.callMethod<void>("close", "()V");
   if (env.checkAndClearExceptions())
     return {};
+  trimBars(path);
   return path;
 }
 
@@ -279,7 +341,6 @@ QList<Row> queryMusicFolder() {
       QJniObject::fromString("title COLLATE NOCASE ASC").object<jstring>());
   if (env.checkAndClearExceptions() || !cursor.isValid())
     return rows;
-
   while (cursor.callMethod<jboolean>("moveToNext", "()Z")) {
     const qint64 id = cursor.callMethod<jlong>("getLong", "(I)J", 0);
     const QString title =
@@ -305,7 +366,6 @@ QList<Row> queryMusicFolder() {
 
 Controller::Controller(QObject *parent) : QObject(parent) {
   m_player.attach(m_spectrum.output());
-
   connect(&m_player, &Player::positionChanged, this,
           [this] { m_spectrum.setPosition(m_player.position()); });
   connect(&m_player, &Player::metaDataChanged, this,
@@ -335,7 +395,6 @@ Controller::Controller(QObject *parent) : QObject(parent) {
             if (state != Qt::ApplicationActive)
               saveState();
           });
-
   connect(this, &Controller::playingChanged, this, &Controller::syncDiscord);
   connect(this, &Controller::currentChanged, this, &Controller::syncDiscord);
   connect(&m_info, &MediaInfo::changed, this, &Controller::syncDiscord);
@@ -349,18 +408,15 @@ Controller::Controller(QObject *parent) : QObject(parent) {
           });
   connect(this, &Controller::tracksChanged, this,
           [this] { m_normDirty = true; });
-
   m_autoNext = QSettings().value("autoNext", true).toBool();
   m_shuffle = QSettings().value("shuffle", false).toBool();
   m_repeatMode = qBound(0, QSettings().value("repeatMode", 0).toInt(), 2);
   QTimer::singleShot(0, this, [this] {
     m_discord.setEnabled(QSettings().value("discord", false).toBool());
   });
-
 #ifdef Q_OS_ANDROID
   g_ctl = this;
   registerNatives();
-
   auto push = [this] {
     if (m_current < 0 || m_current >= m_tracks.size())
       return;
@@ -407,6 +463,38 @@ void Controller::syncDiscord() {
                    m_info.artist().isEmpty() ? t.artist : m_info.artist(),
                    m_player.duration(), m_player.position(), playing());
 }
+
+void Controller::inspect(const QString &uri) {
+  const QUrl url(uri);
+  if (m_current >= 0 && m_current < m_tracks.size() &&
+      m_tracks[m_current].url == url && m_player.duration() > 0) {
+    emit inspected(uri, describe(m_player.metaData(), m_player.duration()));
+    return;
+  }
+  std::shared_ptr<QFile> file(m_player.openDevice(url).release());
+  if (!file) {
+    emit inspected(uri, {});
+    return;
+  }
+  auto *mp = new QMediaPlayer(this);
+  mp->setSourceDevice(file.get(), url);
+  auto done = std::make_shared<bool>(false);
+  auto finish = [this, mp, file, done, uri] {
+    if (*done)
+      return;
+    *done = true;
+    emit inspected(uri, describe(mp->metaData(), mp->duration()));
+    mp->deleteLater();
+  };
+  connect(mp, &QMediaPlayer::mediaStatusChanged, mp,
+          [finish](QMediaPlayer::MediaStatus s) {
+            if (s == QMediaPlayer::LoadedMedia ||
+                s == QMediaPlayer::InvalidMedia)
+              finish();
+          });
+  QTimer::singleShot(4000, mp, finish);
+}
+
 void Controller::loadCache() {
   for (const QJsonValue &v : Store::readLibrary()) {
     const QJsonObject o = v.toObject();
@@ -545,7 +633,6 @@ void Controller::playQueue(const QStringList &uris, int start) {
   byUrl.reserve(m_tracks.size());
   for (int i = 0; i < m_tracks.size(); ++i)
     byUrl.insert(m_tracks[i].url.toString(), i);
-
   QList<int> queue;
   int first = -1;
   for (int i = 0; i < uris.size(); ++i) {
@@ -638,12 +725,10 @@ void Controller::importLibrary() {
           QUrl playingUrl;
           if (m_current >= 0 && m_current < m_tracks.size())
             playingUrl = m_tracks[m_current].url;
-
           QStringList queueUrls;
           for (int i : std::as_const(m_queue))
             if (i >= 0 && i < m_tracks.size())
               queueUrls << m_tracks[i].url.toString();
-
           m_tracks = list;
           m_current = -1;
           QHash<QString, int> byUrl;
@@ -653,14 +738,12 @@ void Controller::importLibrary() {
             if (m_tracks[i].url == playingUrl)
               m_current = i;
           }
-
           m_queue.clear();
           for (const QString &u : std::as_const(queueUrls)) {
             const auto it = byUrl.constFind(u);
             if (it != byUrl.constEnd())
               m_queue.append(it.value());
           }
-
           m_scanning = false;
           emit tracksChanged();
           emit currentChanged();

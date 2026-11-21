@@ -57,8 +57,10 @@ public:
   Q_INVOKABLE void scanLibrary();
   Q_INVOKABLE void skipPrev();
   Q_INVOKABLE QVariantList search(const QString &query);
+  Q_INVOKABLE void inspect(const QString &uri);
 
 signals:
+  void inspected(const QString &uri, const QVariantList &rows);
   void tracksChanged();
   void recentChanged();
   void currentChanged();

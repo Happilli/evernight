@@ -93,6 +93,7 @@ void drawGlyph(QPainter *p, const QFont &font, const QString &text,
   f.setPixelSize(qMax(1, qRound(size)));
   f.setHintingPreference(QFont::PreferDefaultHinting);
   QPainterPath gp;
+  gp.setFillRule(Qt::WindingFill);
   gp.addText(QPointF(0.0, 0.0), f, text);
   const QRectF br = gp.boundingRect();
   if (br.isEmpty())
