@@ -119,15 +119,18 @@ FadePage {
                         height: grid.cellH
 
                         Rectangle {
+                            id: cover
+                            readonly property bool liked: cell.modelData.id === "liked"
                             x: 0
                             y: 0
                             width: grid.cellW
                             height: grid.cellW
                             color: Theme.secondaryContainer
+                            clip: true
 
                             Text {
                                 anchors.centerIn: parent
-                                text: "\u266B"
+                                text: cover.liked ? "\u2605\uFE0E" : "\u266B"
                                 color: Theme.onSurfaceColor
                                 font.pixelSize: parent.width * 0.35
                                 visible: art.status !== Image.Ready
@@ -143,7 +146,6 @@ FadePage {
                                 sourceSize.height: 400
                             }
                         }
-
                         Column {
                             x: 12
                             y: grid.cellW + 8

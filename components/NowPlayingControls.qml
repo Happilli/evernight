@@ -6,14 +6,31 @@ Column {
     id: root
 
     property real pw: 0
+    property string trackUri: ""
+    property bool liked: false
+
     signal queueRequested
     signal skipRequested(int dir)
+
+    function refreshLiked() {
+        liked = trackUri !== "" && Playlists.isLiked(trackUri);
+    }
 
     function fmt(ms) {
         var s = Math.floor(Math.max(0, ms) / 1000);
         var m = Math.floor(s / 60);
         s = s % 60;
         return m + ":" + (s < 10 ? "0" : "") + s;
+    }
+
+    onTrackUriChanged: refreshLiked()
+    Component.onCompleted: refreshLiked()
+
+    Connections {
+        target: Playlists
+        function onChanged() {
+            root.refreshLiked();
+        }
     }
 
     width: pw - 64
@@ -150,7 +167,21 @@ Column {
 
     Row {
         anchors.horizontalCenter: parent.horizontalCenter
-        spacing: 28
+        spacing: 14
+        MaterialIconButton {
+            type: MaterialIconButton.Standard
+            sizeStyle: MaterialIconButton.Medium
+            iconSize: 28
+            iconSource: root.liked ? "../icons/heart_filled.svg" : "../icons/heart.svg"
+            checked: root.liked
+            color: "transparent"
+            checkedColor: Theme.secondaryContainer
+            iconColor: Theme.onSurfaceVariantColor
+            checkedIconColor: Theme.onSurfaceColor
+            onClicked: {
+                const r = Playlists.toggleLike(root.trackUri);
+            }
+        }
 
         MaterialIconButton {
             type: MaterialIconButton.Standard

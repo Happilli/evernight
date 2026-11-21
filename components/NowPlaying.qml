@@ -408,6 +408,7 @@ Rectangle {
         enabled: root.p > 0.6
         sourceComponent: NowPlayingControls {
             pw: root.pw
+            trackUri: root.track ? root.track.uri : ""
             onQueueRequested: root.queueRequested()
             onSkipRequested: dir => root.skip(dir)
         }
