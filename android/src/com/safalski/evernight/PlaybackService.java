@@ -24,6 +24,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.util.Log;
 
 public class PlaybackService extends Service {
@@ -55,6 +56,7 @@ public class PlaybackService extends Service {
     private static long position;
     private static boolean playing;
     private static boolean quitting;
+    private static long ignorePlayUntil;
 
     private static native void nativeCommand(int cmd, long arg);
 
@@ -63,6 +65,24 @@ public class PlaybackService extends Service {
             nativeCommand(cmd, arg);
         } catch (UnsatisfiedLinkError ignored) {
         }
+    }
+
+    private static void command(int cmd) {
+        Log.i(TAG, "command " + cmd);
+        if (cmd == CMD_PLAY || cmd == CMD_PAUSE) {
+            final boolean pause = cmd == CMD_PAUSE;
+            MAIN.post(() -> {
+                if (deferred != null) {
+                    MAIN.removeCallbacks(deferred);
+                    deferred = null;
+                }
+                ignorePlayUntil = pause ? SystemClock.uptimeMillis() + 800 : 0;
+                playing = !pause;
+                if (live != null)
+                    live.render();
+            });
+        }
+        send(cmd, 0);
     }
 
     private static Runnable deferred;
@@ -92,6 +112,8 @@ public class PlaybackService extends Service {
             }
         };
         MAIN.post(() -> {
+            if (pl && SystemClock.uptimeMillis() < ignorePlayUntil)
+                return;
             if (deferred != null) {
                 MAIN.removeCallbacks(deferred);
                 deferred = null;
@@ -131,7 +153,7 @@ public class PlaybackService extends Service {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (playing && AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction()))
-                send(CMD_PAUSE, 0);
+                command(CMD_PAUSE);
         }
     };
 
@@ -143,18 +165,18 @@ public class PlaybackService extends Service {
                 hasFocus = true;
                 if (resumeOnGain) {
                     resumeOnGain = false;
-                    send(CMD_PLAY, 0);
+                    command(CMD_PLAY);
                 }
                 break;
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
                 hasFocus = false;
                 resumeOnGain = playing;
-                send(CMD_PAUSE, 0);
+                command(CMD_PAUSE);
                 break;
             case AudioManager.AUDIOFOCUS_LOSS:
                 hasFocus = false;
                 resumeOnGain = false;
-                send(CMD_PAUSE, 0);
+                command(CMD_PAUSE);
                 break;
             default:
                 break;
@@ -209,8 +231,8 @@ public class PlaybackService extends Service {
 
         session = new MediaSession(this, "Evernight");
         session.setCallback(new MediaSession.Callback() {
-            @Override public void onPlay() { send(CMD_PLAY, 0); }
-            @Override public void onPause() { send(CMD_PAUSE, 0); }
+            @Override public void onPlay() { command(CMD_PLAY); }
+            @Override public void onPause() { command(CMD_PAUSE); }
             @Override public void onSkipToNext() { send(CMD_NEXT, 0); }
             @Override public void onSkipToPrevious() { send(CMD_PREV, 0); }
             @Override public void onSeekTo(long pos) { send(CMD_SEEK, pos); }
@@ -234,8 +256,8 @@ public class PlaybackService extends Service {
             return START_NOT_STICKY;
         }
         switch (name) {
-            case ACTION_PLAY: send(CMD_PLAY, 0); break;
-            case ACTION_PAUSE: send(CMD_PAUSE, 0); break;
+            case ACTION_PLAY: command(CMD_PLAY); break;
+            case ACTION_PAUSE: command(CMD_PAUSE); break;
             case ACTION_NEXT: send(CMD_NEXT, 0); break;
             case ACTION_PREV: send(CMD_PREV, 0); break;
             default: break;
