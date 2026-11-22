@@ -191,6 +191,8 @@ MaterialShape::Type MaterialShape::loadShapeAt(int i) const {
 }
 
 void MaterialShape::setImage(const QImage &i) {
+  if (m_source.isEmpty() && i.cacheKey() == m_image.cacheKey())
+    return;
   m_source = QUrl();
   m_image = i;
   m_scaled = QImage();
@@ -414,6 +416,7 @@ void MaterialShape::buildImage() {
   q.drawImage(dst, m_image, src);
   q.end();
   m_scaled = std::move(out);
+  m_scaledPx = px;
 }
 
 void MaterialShape::setColor(const QColor &c) {
@@ -523,19 +526,21 @@ void MaterialShape::paint(QPainter *p) {
 
   if (!m_image.isNull()) {
     const int need = neededPx();
-    if (m_imageDirty || m_scaledPx <= 0 || need > m_scaledPx ||
-        need < m_scaledPx / 2)
+    if (m_imageDirty || m_scaledPx <= 0 || need > m_scaledPx)
       buildImage();
     if (!m_scaled.isNull()) {
       const qreal side = imageSide();
-      p->save();
-      p->setClipPath(m_path);
-      p->setRenderHint(QPainter::SmoothPixmapTransform, true);
-      p->translate(width() / 2.0, height() / 2.0);
+      QTransform t;
+      t.translate(width() / 2.0, height() / 2.0);
       if (m_loading)
-        p->rotate(-rotation());
-      p->drawImage(QRectF(-side / 2.0, -side / 2.0, side, side), m_scaled);
-      p->restore();
+        t.rotate(-rotation());
+      t.translate(-side / 2.0, -side / 2.0);
+      t.scale(side / m_scaled.width(), side / m_scaled.height());
+      QBrush b(m_scaled);
+      b.setTransform(t);
+      p->setPen(Qt::NoPen);
+      p->setBrush(b);
+      p->drawPath(m_path);
     }
   }
   if (!m_glyph.isEmpty() && m_glyphSize > 0.0) {

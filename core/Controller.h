@@ -41,7 +41,7 @@ public:
   QVariantList queue() const;
   int current() const { return m_current; }
   bool playing() const {
-    return m_player.state() == QMediaPlayer::PlayingState;
+    return m_switching || m_player.state() == QMediaPlayer::PlayingState;
   }
   bool shuffle() const { return m_shuffle; }
   int repeatMode() const { return m_repeatMode; }
@@ -105,6 +105,7 @@ private:
   DiscordPresence m_discord;
   QList<Track> m_tracks;
   QStringList m_recent;
+  bool m_switching = false;
   QList<int> m_queue;
   int m_current = -1;
   bool m_shuffle = false;

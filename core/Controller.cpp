@@ -371,7 +371,18 @@ Controller::Controller(QObject *parent) : QObject(parent) {
   connect(&m_player, &Player::metaDataChanged, this,
           [this] { m_info.setMetaData(m_player.metaData()); });
   connect(&m_player, &Player::stateChanged, this, [this] {
+    if (m_player.state() == QMediaPlayer::PlayingState)
+      m_switching = false;
+    else if (m_switching)
+      return;
     m_spectrum.setActive(playing());
+    emit playingChanged();
+  });
+  connect(&m_player, &Player::statusChanged, this, [this] {
+    if (!m_switching || m_player.status() != QMediaPlayer::InvalidMedia)
+      return;
+    m_switching = false;
+    m_spectrum.setActive(false);
     emit playingChanged();
   });
   connect(&m_player, &Player::ended, this, &Controller::onEnded);
@@ -608,8 +619,11 @@ int Controller::queuePos() const {
 void Controller::play(int index) {
   if (index < 0 || index >= m_tracks.size())
     return;
-  if (!m_player.open(m_tracks[index].url))
+  m_switching = playing();
+  if (!m_player.open(m_tracks[index].url)) {
+    m_switching = false;
     return;
+  }
   m_pendingSeek = -1;
   m_current = index;
   emit currentChanged();
