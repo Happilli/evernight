@@ -22,7 +22,7 @@ Window {
             np.collapse();
             return true;
         }
-        if (playlistSheet.handleBack())
+        if (playlistDialog.handleBack())
             return true;
         if (songSheet.open) {
             songSheet.open = false;
@@ -88,7 +88,7 @@ Window {
             PlaylistsPage {
                 id: playlistsPage
                 onOpenRequested: playlistId => root.detailId = playlistId
-                onCreateRequested: playlistSheet.openCreate()
+                onCreateRequested: playlistDialog.openCreate()
             }
             Loader {
                 width: ListView.view ? ListView.view.width : 0
@@ -130,10 +130,10 @@ Window {
             root.detailId = "";
         }
         function onRenameRequested(id, name) {
-            playlistSheet.openRename(id, name);
+            playlistDialog.openRename(id, name);
         }
         function onDeleteRequested(id, name) {
-            playlistSheet.openDelete(id, name);
+            playlistDialog.openDelete(id, name);
         }
         function onSongLongPressed(uri, title, artist, playlistId) {
             songSheet.openFor(uri, title, artist, playlistId);
@@ -152,17 +152,16 @@ Window {
         id: overlayLayer
         anchors.fill: parent
 
-        PlaylistSheet {
-            id: playlistSheet
-            anchors.fill: parent
-        }
-
         SongSheet {
             id: songSheet
             anchors.fill: parent
         }
         QueueSheet {
             id: queueSheet
+            anchors.fill: parent
+        }
+        PlaylistDialog {
+            id: playlistDialog
             anchors.fill: parent
         }
     }
