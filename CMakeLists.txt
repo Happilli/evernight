@@ -71,6 +71,7 @@ kit_module(Extraa
 )
 
 set_source_files_properties(theme/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(theme/Snack.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 collect(APP_SOURCES core/*.cpp core/*.h)
 collect(APP_QML components/*.qml pages/*.qml)
@@ -84,6 +85,7 @@ qt_add_qml_module(appEvernight
     QML_FILES
         Main.qml
         theme/Theme.qml
+        theme/Snack.qml
         ${APP_QML}
     RESOURCES ${APP_ICONS} ${APP_THEMES}
 )

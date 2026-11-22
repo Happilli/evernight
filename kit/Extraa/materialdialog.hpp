@@ -1,5 +1,4 @@
 #pragma once
-#include "../Core/paintutil.hpp"
 #include "../Core/sgitem.hpp"
 #include <QColor>
 #include <QFont>

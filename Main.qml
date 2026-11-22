@@ -1,4 +1,5 @@
 pragma ComponentBehavior: Bound
+import Evernight.Extraa
 import QtQuick
 import QtQuick.Window
 import QtQml.Models
@@ -9,10 +10,8 @@ Window {
     visible: true
     title: "Evernight"
     color: Theme.background
-
     property string detailId: ""
     readonly property real playerInset: np.visible ? np.miniHeight + np.miniBottom + 12 : 0
-
     function handleBack() {
         if (queueSheet.open) {
             queueSheet.open = false;
@@ -40,14 +39,12 @@ Window {
         if (handleBack())
             close.accepted = false;
     }
-
     Binding {
         target: view
         property: "interactive"
         value: false
         when: np.p > 0.02
     }
-
     AppTabs {
         id: tabs
         anchors.top: parent.top
@@ -60,7 +57,6 @@ Window {
                 view.currentIndex = currentIndex;
         }
     }
-
     ListView {
         id: view
         anchors.top: tabs.bottom
@@ -102,7 +98,6 @@ Window {
                 tabs.currentIndex = currentIndex;
         }
     }
-
     Loader {
         id: detailLoader
         readonly property PlaylistDetail page: item as PlaylistDetail
@@ -115,14 +110,12 @@ Window {
             }
         }
     }
-
     Binding {
         target: detailLoader.item
         property: "playlistId"
         value: root.detailId
         when: detailLoader.item !== null
     }
-
     Connections {
         target: detailLoader.item
         ignoreUnknownSignals: true
@@ -139,7 +132,6 @@ Window {
             songSheet.openFor(uri, title, artist, playlistId);
         }
     }
-
     NowPlaying {
         id: np
         blocked: queueSheet.open
@@ -147,11 +139,9 @@ Window {
             queueSheet.open = true;
         }
     }
-
     Item {
         id: overlayLayer
         anchors.fill: parent
-
         SongSheet {
             id: songSheet
             anchors.fill: parent
@@ -163,6 +153,32 @@ Window {
         PlaylistDialog {
             id: playlistDialog
             anchors.fill: parent
+        }
+        MaterialSnackbar {
+            id: snack
+            anchors.fill: parent
+            property string kind: ""
+            property string listId: ""
+            property string songUri: ""
+            color: Theme.inverseSurface
+            bottomMargin: 24
+            textColor: Theme.inverseOnSurface
+            actionColor: Theme.inversePrimary
+            onActionClicked: {
+                if (kind === "added")
+                    Playlists.remove(listId, songUri);
+                else if (kind === "removed")
+                    Playlists.add(listId, songUri);
+            }
+        }
+        Connections {
+            target: Snack
+            function onRequested(message, kind, listId, songUri) {
+                snack.kind = kind;
+                snack.listId = listId;
+                snack.songUri = songUri;
+                snack.show(message, kind !== "" ? "Undo" : "");
+            }
         }
     }
 }

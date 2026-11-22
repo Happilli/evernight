@@ -1,4 +1,5 @@
 #include "./materialdialog.hpp"
+#include "../Core/paintutil.hpp"
 #include <QFontMetricsF>
 #include <algorithm>
 #include <cmath>

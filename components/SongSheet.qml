@@ -77,6 +77,7 @@ MaterialSheet {
                 contentColor: Theme.onSurfaceColor
                 onClicked: {
                     Playlists.remove(sheet.fromList, sheet.uri);
+                    Snack.show("Removed from playlist", "removed", sheet.fromList, sheet.uri);
                     sheet.open = false;
                 }
             }
@@ -108,7 +109,13 @@ MaterialSheet {
                     };
                 })
                 onClicked: (index, item) => {
-                    Playlists.add(sheet.lists[index].id, sheet.uri);
+                    const l = sheet.lists[index];
+                    if (Playlists.contains(l.id, sheet.uri)) {
+                        Snack.show("Already in " + l.name);
+                    } else {
+                        Playlists.add(l.id, sheet.uri);
+                        Snack.show("Added to " + l.name, "added", l.id, sheet.uri);
+                    }
                     sheet.open = false;
                 }
             }
