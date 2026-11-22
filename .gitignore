@@ -14,3 +14,5 @@ local.properties
 *.keystore
 .qmlls.ini
 third_party/discord_social_sdk/
+android/libs/discord_partner_sdk.jar
+third_party/discord_social_sdk/
