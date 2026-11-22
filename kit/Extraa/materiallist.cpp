@@ -162,6 +162,12 @@ void MaterialList::componentComplete() {
   SgMaterialItem::componentComplete();
   attachFlickable();
   update();
+  updateEqRect();
+}
+
+void MaterialList::onFlick() {
+  update();
+  updateEqRect();
 }
 
 void MaterialList::attachFlickable() {
@@ -182,15 +188,34 @@ void MaterialList::attachFlickable() {
   m_flick = found;
   if (found)
     m_flickConn =
-        connect(found, SIGNAL(contentYChanged()), this, SLOT(update()));
+        connect(found, SIGNAL(contentYChanged()), this, SLOT(onFlick()));
 }
-
 void MaterialList::itemChange(ItemChange change, const ItemChangeData &data) {
   SgMaterialItem::itemChange(change, data);
   if (change == ItemParentHasChanged)
     attachFlickable();
 }
 
+void MaterialList::updateEqRect() {
+  QRectF r;
+  const int i = m_eqIndex;
+  if (i >= 0 && i < int(m_items.size()) && i < int(m_tops.size()) &&
+      !m_items[i].divider) {
+    bool show = true;
+    if (int(m_items.size()) > kWindow) {
+      int f = 0, l = -1;
+      show = visibleRows(f, l) && i >= f && i <= std::min(l, f + kWindow - 1);
+    }
+    if (show) {
+      const qreal S = m_items[i].imagePath.isEmpty() ? kAvatar : kImage;
+      r = QRectF(kPad, m_tops[i] + baseHeight(i) / 2.0 - S / 2.0, S, S);
+    }
+  }
+  if (m_eqRect == r)
+    return;
+  m_eqRect = r;
+  emit equalizerRectChanged();
+}
 void MaterialList::geometryChange(const QRectF &n, const QRectF &o) {
   QQuickItem::geometryChange(n, o);
   if (n.size() == o.size())
@@ -396,6 +421,7 @@ void MaterialList::relayout() {
   setImplicitHeight(std::ceil(std::max(0.0, y)));
   update();
   syncHighlight();
+  updateEqRect();
 }
 
 void MaterialList::structureChanged() {
@@ -441,11 +467,7 @@ bool MaterialList::visibleRows(int &first, int &last) const {
   const int n = int(m_items.size());
   if (n == 0)
     return false;
-  if (n <= kWindow) {
-    first = 0;
-    last = n - 1;
-    return true;
-  }
+
   qreal top = 0.0;
   qreal bottom = height();
   if (window()) {
@@ -687,11 +709,15 @@ void MaterialList::setDividerColor(const QColor &v) {
 }
 
 void MaterialList::setEqualizerIndex(int v) {
-  assign(m_eqIndex, v, &MaterialList::equalizerIndexChanged);
+  if (assign(m_eqIndex, v, &MaterialList::equalizerIndexChanged))
+    updateEqRect();
 }
 
 void MaterialList::setEqualizerLevels(const QList<qreal> &v) {
-  assign(m_eqLevels, v, &MaterialList::equalizerLevelsChanged);
+  if (m_eqLevels == v)
+    return;
+  m_eqLevels = v;
+  emit equalizerLevelsChanged();
 }
 
 void MaterialList::mousePressEvent(QMouseEvent *e) {
@@ -861,22 +887,8 @@ void MaterialList::build(Kit::Mesh &m) {
     if (i == m_eqIndex) {
       const qreal S = hasImage ? kImage : kAvatar;
       const qreal rad = hasImage ? kImageR : S / 2.0;
-      const QRectF box(xl, cy - S / 2.0, S, S);
-      m.fillRoundedRect(box, rad, rad, rad, rad, d(m_avatarColor));
-      const int nb = m_eqLevels.isEmpty() ? 4 : int(m_eqLevels.size());
-      const qreal maxH = S * 0.45;
-      const qreal total = nb * kEqBarW + (nb - 1) * kEqBarGap;
-      const qreal baseY = cy + maxH / 2.0;
-      qreal bx = box.center().x() - total / 2.0;
-      for (int b = 0; b < nb; ++b) {
-        const qreal lv =
-            b < m_eqLevels.size() ? std::clamp(m_eqLevels[b], 0.0, 1.0) : 0.0;
-        const qreal bh = kEqMinH + (maxH - kEqMinH) * lv;
-        m.fillRoundedRect(QRectF(m.snap(bx), baseY - bh, kEqBarW, bh),
-                          kEqBarW / 2.0, kEqBarW / 2.0, kEqBarW / 2.0,
-                          kEqBarW / 2.0, d(m_avatarTextColor));
-        bx += kEqBarW + kEqBarGap;
-      }
+      m.fillRoundedRect(QRectF(xl, cy - S / 2.0, S, S), rad, rad, rad, rad,
+                        d(m_avatarColor));
       xl += S + kGap;
     } else if (hasImage) {
       const QString key =
@@ -969,14 +981,40 @@ void MaterialList::build(Kit::Mesh &m) {
       lines[ln++] = {kSlotHeadline, &e.eHead, &headF, kHeadlineLh, fg};
     if (!e.supporting.isEmpty())
       lines[ln++] = {kSlotSupporting, &e.eSup, &supF, kSupportLh, sup};
+
     qreal total = 0.0;
     for (int k = 0; k < ln; ++k)
       total += lines[k].lh;
-    qreal y = cy - total / 2.0;
-    for (int k = 0; k < ln; ++k) {
-      textLayer(slot + lines[k].slot, *lines[k].f, *lines[k].s, d(lines[k].c),
-                xl, y + lines[k].lh / 2.0);
-      y += lines[k].lh;
+    if (ln > 0 && avail > 1.0) {
+      constexpr qreal pad = 1.0;
+      const qreal y0 = cy - total / 2.0;
+      const QRectF rect(m.snap(xl - pad), m.snap(y0),
+                        std::ceil(avail) + 2.0 * pad, std::ceil(total));
+      QColor cols[3];
+      QStringList kp{QStringLiteral("rt"), QString::number(dpr),
+                     QString::number(rect.width()),
+                     QString::number(rect.height())};
+      for (int k = 0; k < ln; ++k) {
+        cols[k] =
+            Kit::withAlpha(d(lines[k].c), d(lines[k].c).alphaF() * fade());
+        kp << *lines[k].s << cols[k].name(QColor::HexArgb) << lines[k].f->key();
+      }
+      useLayer(slot + kSlotHeadline, kp.join(QLatin1Char('|')), rect,
+               [&]() -> QImage {
+                 QImage img = Kit::newImage(rect.width(), rect.height(), dpr);
+                 QPainter p(&img);
+                 p.setRenderHint(QPainter::Antialiasing, true);
+                 p.setRenderHint(QPainter::TextAntialiasing, true);
+                 p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+                 qreal yy = 0.0;
+                 for (int k = 0; k < ln; ++k) {
+                   Kit::drawLabel(&p, *lines[k].f, *lines[k].s, pad,
+                                  yy + lines[k].lh / 2.0, cols[k]);
+                   yy += lines[k].lh;
+                 }
+                 p.end();
+                 return img;
+               });
     }
     if (extH > 0.5 && !e.dRows.empty()) {
       const qreal a = std::clamp((ex - 0.2) / 0.8, 0.0, 1.0);

@@ -37,6 +37,7 @@ Column {
         readonly property real target: Math.max(0, Math.min(1, (seek.pressed || holding) ? seekFrac : (Controller.player.duration > 0 ? Controller.player.position / Controller.player.duration : 0)))
         property real shown: target
         Behavior on shown {
+            enabled: seek.pressed || bar.holding
             NumberAnimation {
                 duration: seek.pressed ? 70 : 160
                 easing.type: Easing.OutCubic
@@ -57,9 +58,9 @@ Column {
             color: Theme.onSurfaceColor
             trackColor: Theme.surfaceContainerHighest
             wavelength: 28
-            waveSpeed: 0.8
-            amplitude: Controller.playing && !seek.pressed ? 3 : 0
-            strokeWidth: seek.pressed ? 8 : 6
+            strokeWidth: 3
+            amplitude: Controller.playing ? 3 : 0
+            waveSpeed: Controller.playing ? 0.8 : 0
             Behavior on amplitude {
                 NumberAnimation {
                     duration: 300

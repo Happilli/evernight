@@ -15,3 +15,5 @@ local.properties
 .qmlls.ini
 third_party/discord_social_sdk/
 android/libs/
+evernight-live.sh
+build-rel/

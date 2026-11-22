@@ -365,7 +365,9 @@ QList<Row> queryMusicFolder() {
 } // namespace
 
 Controller::Controller(QObject *parent) : QObject(parent) {
-  m_player.attach(m_spectrum.output());
+  connect(&m_spectrum, &Spectrum::activeChanged, this, [this](bool on) {
+    m_player.attach(on ? m_spectrum.output() : nullptr);
+  });
   connect(&m_player, &Player::positionChanged, this,
           [this] { m_spectrum.setPosition(m_player.position()); });
   connect(&m_player, &Player::metaDataChanged, this,

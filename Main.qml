@@ -10,6 +10,12 @@ Window {
     visible: true
     title: "Evernight"
     color: Theme.background
+
+    Binding {
+        target: Controller.spectrum
+        property: "wanted"
+        value: np.p <= 0.02 && view.currentIndex === 0 && Qt.application.state === Qt.ApplicationActive
+    }
     property string detailId: ""
     readonly property real playerInset: np.visible ? np.miniHeight + np.miniBottom + 12 : 0
     function handleBack() {

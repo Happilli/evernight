@@ -3,11 +3,11 @@
 #include <cmath>
 
 namespace {
-constexpr float kAttack[Spectrum::kBands] = {0.018f, 0.024f, 0.032f, 0.040f};
-constexpr float kRelease[Spectrum::kBands] = {0.085f, 0.105f, 0.130f, 0.160f};
-constexpr float kRange[Spectrum::kBands] = {26.0f, 28.0f, 33.0f, 38.0f};
-constexpr float kCurve[Spectrum::kBands] = {1.25f, 1.35f, 1.55f, 1.75f};
-constexpr float kPeakFall[Spectrum::kBands] = {0.15f, 0.12f, 0.09f, 0.07f};
+constexpr float kAttack[Spectrum::kBands] = {0.018f, 0.028f, 0.040f};
+constexpr float kRelease[Spectrum::kBands] = {0.085f, 0.120f, 0.160f};
+constexpr float kRange[Spectrum::kBands] = {26.0f, 31.0f, 38.0f};
+constexpr float kCurve[Spectrum::kBands] = {1.25f, 1.50f, 1.75f};
+constexpr float kPeakFall[Spectrum::kBands] = {0.15f, 0.10f, 0.07f};
 constexpr float kDisplayTau = 0.022f;
 constexpr qint64 kDriftMs = 150;
 } // namespace
@@ -32,15 +32,30 @@ Spectrum::Spectrum(QObject *parent)
 
   connect(&m_out, &QAudioBufferOutput::audioBufferReceived, this,
           &Spectrum::onBuffer);
-  m_timer.setInterval(16);
+  m_timer.setInterval(33);
   m_timer.setTimerType(Qt::PreciseTimer);
   connect(&m_timer, &QTimer::timeout, this, &Spectrum::tick);
 }
 
 void Spectrum::setActive(bool on) {
+  m_playing = on;
+  apply();
+}
+
+void Spectrum::setWanted(bool v) {
+  if (m_wanted == v)
+    return;
+  m_wanted = v;
+  emit wantedChanged();
+  apply();
+}
+
+void Spectrum::apply() {
+  const bool on = m_playing && m_wanted;
   if (m_active == on)
     return;
   m_active = on;
+  emit activeChanged(on);
   if (on) {
     m_q.clear();
     m_clock.restart();
@@ -203,5 +218,14 @@ void Spectrum::tick() {
                      [](qreal v) { return v > 0.0; }))
       m_timer.stop();
   }
+  bool changed = false;
+  for (int b = 0; b < kBands; ++b)
+    if (std::abs(m_levels[b] - m_sent[b]) > 0.01 ||
+        (m_levels[b] == 0.0 && m_sent[b] != 0.0))
+      changed = true;
+  if (!changed)
+    return;
+  for (int b = 0; b < kBands; ++b)
+    m_sent[b] = m_levels[b];
   emit levelsChanged();
 }

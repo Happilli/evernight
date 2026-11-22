@@ -196,12 +196,23 @@ FadePage {
                 onExpandRequested: (index, item) => {
                     Controller.inspect(Controller.tracks[page.matches[index]].uri);
                 }
-            }
-            Binding {
-                target: songList
-                property: "equalizerLevels"
-                value: Controller.spectrum.levels
-                when: !page.eqPaused
+
+                MaterialEqualizer {
+                    id: eq
+                    visible: songList.equalizerRect.width > 0
+                    x: songList.equalizerRect.x
+                    y: songList.equalizerRect.y
+                    width: songList.equalizerRect.width
+                    height: songList.equalizerRect.height
+                    color: Theme.onSurfaceColor
+
+                    Binding {
+                        target: eq
+                        property: "levels"
+                        value: Controller.spectrum.levels
+                        when: !page.eqPaused
+                    }
+                }
             }
 
             Item {

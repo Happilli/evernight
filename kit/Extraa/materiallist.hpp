@@ -7,6 +7,7 @@
 #include <QMouseEvent>
 #include <QMutex>
 #include <QPointer>
+#include <QRectF>
 #include <QSet>
 #include <QString>
 #include <QStringList>
@@ -60,6 +61,8 @@ class MaterialList : public SgMaterialItem {
                  NOTIFY equalizerIndexChanged)
   Q_PROPERTY(QList<qreal> equalizerLevels READ equalizerLevels WRITE
                  setEqualizerLevels NOTIFY equalizerLevelsChanged)
+  Q_PROPERTY(
+      QRectF equalizerRect READ equalizerRect NOTIFY equalizerRectChanged)
 
 public:
   enum Variant { Standard, Segmented };
@@ -71,6 +74,7 @@ public:
 
   QVariantList model() const { return m_raw; }
   int count() const { return m_items.size(); }
+  QRectF equalizerRect() const { return m_eqRect; }
   Variant variant() const { return m_variant; }
   SelectionMode selectionMode() const { return m_mode; }
   QList<int> checkedIndices() const { return m_checked; }
@@ -123,6 +127,7 @@ public:
   Q_INVOKABLE void setDetails(int index, const QVariantList &rows);
 
 signals:
+  void equalizerRectChanged();
   void trailingClicked(int index, const QVariant &item);
   void expandRequested(int index, const QVariant &item);
   void longPressed(int index, const QVariant &item);
@@ -158,7 +163,12 @@ protected:
   void mouseReleaseEvent(QMouseEvent *e) override;
   void mouseUngrabEvent() override;
 
+private slots:
+  void onFlick();
+
 private:
+  void updateEqRect();
+  QRectF m_eqRect;
   struct Detail {
     QString label;
     QString value;

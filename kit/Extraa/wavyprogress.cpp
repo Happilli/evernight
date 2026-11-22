@@ -64,6 +64,8 @@ void WavyProgress::syncFrames(QQuickWindow *w) {
 }
 
 void WavyProgress::onFrame() {
+  if (m_clock.nsecsElapsed() < 30000000)
+    return;
   const qreal dt = std::min(qreal(m_clock.restart()) / 1000.0, kMaxDt);
   m_phase = std::fmod(m_phase + dt * m_waveSpeed * kTwoPi, kTwoPi);
   m_time = std::fmod(m_time + dt, kCycle * kSpin * 100.0);
