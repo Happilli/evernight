@@ -8,61 +8,55 @@ QtObject {
         return m >= 0 && m <= 2 ? m : 0;
     }
     readonly property bool dark: mode === 0 ? Application.styleHints.colorScheme !== Qt.ColorScheme.Light : mode === 2
+    readonly property var t: dark ? ThemeLoader.dark : ThemeLoader.light
 
-    readonly property color background: dark ? "#000000" : "#FFFFFF"
-    readonly property color onBackgroundColor: dark ? "#FFFFFF" : "#000000"
-
-    readonly property color surface: dark ? "#000000" : "#FFFFFF"
-    readonly property color surfaceDim: dark ? "#000000" : "#E8E8E8"
-    readonly property color surfaceBright: dark ? "#2E2E2E" : "#FFFFFF"
-    readonly property color surfaceContainerLowest: dark ? "#000000" : "#FFFFFF"
-    readonly property color surfaceContainerLow: dark ? "#0F0F0F" : "#F7F7F7"
-    readonly property color surfaceContainer: dark ? "#1C1C1C" : "#F2F2F2"
-    readonly property color surfaceContainerHigh: dark ? "#262626" : "#EBEBEB"
-    readonly property color surfaceContainerHighest: dark ? "#2E2E2E" : "#E0E0E0"
-    readonly property color surfaceVariant: dark ? "#2E2E2E" : "#E0E0E0"
+    readonly property color background: t.background
+    readonly property color onBackgroundColor: t.onBackgroundColor
+    readonly property color surface: t.surface
+    readonly property color surfaceDim: t.surfaceDim
+    readonly property color surfaceBright: t.surfaceBright
+    readonly property color surfaceContainerLowest: t.surfaceContainerLowest
+    readonly property color surfaceContainerLow: t.surfaceContainerLow
+    readonly property color surfaceContainer: t.surfaceContainer
+    readonly property color surfaceContainerHigh: t.surfaceContainerHigh
+    readonly property color surfaceContainerHighest: t.surfaceContainerHighest
+    readonly property color surfaceVariant: t.surfaceVariant
     readonly property color surfaceTint: primary
-    readonly property color onSurfaceColor: dark ? "#FFFFFF" : "#000000"
-    readonly property color onSurfaceVariantColor: dark ? "#A3A3A3" : "#5C5C5C"
-    readonly property color inverseSurface: dark ? "#E6E6E6" : "#1C1C1C"
-    readonly property color inverseOnSurface: dark ? "#1C1C1C" : "#F2F2F2"
-
-    readonly property color outline: dark ? "#6E6E6E" : "#8A8A8A"
-    readonly property color outlineVariant: dark ? "#2E2E2E" : "#D6D6D6"
-
-    readonly property color primary: dark ? "#FFFFFF" : "#3A3A3A"
-    readonly property color onPrimaryColor: dark ? "#000000" : "#FFFFFF"
-    readonly property color primaryContainer: dark ? "#3D3D3D" : "#CFCFCF"
-    readonly property color onPrimaryContainerColor: dark ? "#FFFFFF" : "#000000"
-    readonly property color primaryFixed: "#E6E6E6"
-    readonly property color primaryFixedDim: "#B8B8B8"
-    readonly property color onPrimaryFixedColor: "#000000"
-    readonly property color onPrimaryFixedVariantColor: "#3D3D3D"
-    readonly property color inversePrimary: dark ? "#3A3A3A" : "#FFFFFF"
-
-    readonly property color secondary: dark ? "#A3A3A3" : "#5C5C5C"
-    readonly property color onSecondaryColor: dark ? "#000000" : "#FFFFFF"
-    readonly property color secondaryContainer: dark ? "#2E2E2E" : "#E4E4E4"
-    readonly property color onSecondaryContainerColor: dark ? "#FFFFFF" : "#000000"
-    readonly property color secondaryFixed: "#E4E4E4"
-    readonly property color secondaryFixedDim: "#B0B0B0"
-    readonly property color onSecondaryFixedColor: "#000000"
-    readonly property color onSecondaryFixedVariantColor: "#3D3D3D"
-
-    readonly property color tertiary: dark ? "#8A8A8A" : "#6E6E6E"
-    readonly property color onTertiaryColor: dark ? "#000000" : "#FFFFFF"
-    readonly property color tertiaryContainer: dark ? "#3D3D3D" : "#D6D6D6"
-    readonly property color onTertiaryContainerColor: dark ? "#FFFFFF" : "#000000"
-    readonly property color tertiaryFixed: "#DCDCDC"
-    readonly property color tertiaryFixedDim: "#A8A8A8"
-    readonly property color onTertiaryFixedColor: "#000000"
-    readonly property color onTertiaryFixedVariantColor: "#3D3D3D"
-
-    readonly property color error: dark ? "#D0D0D0" : "#3A3A3A"
-    readonly property color onErrorColor: dark ? "#000000" : "#FFFFFF"
-    readonly property color errorContainer: dark ? "#3D3D3D" : "#CFCFCF"
-    readonly property color onErrorContainerColor: dark ? "#FFFFFF" : "#000000"
-
-    readonly property color scrim: "#000000"
-    readonly property color shadow: "#000000"
+    readonly property color onSurfaceColor: t.onSurfaceColor
+    readonly property color onSurfaceVariantColor: t.onSurfaceVariantColor
+    readonly property color inverseSurface: t.inverseSurface
+    readonly property color inverseOnSurface: t.inverseOnSurface
+    readonly property color outline: t.outline
+    readonly property color outlineVariant: t.outlineVariant
+    readonly property color primary: t.primary
+    readonly property color onPrimaryColor: t.onPrimaryColor
+    readonly property color primaryContainer: t.primaryContainer
+    readonly property color onPrimaryContainerColor: t.onPrimaryContainerColor
+    readonly property color primaryFixed: t.primaryFixed
+    readonly property color primaryFixedDim: t.primaryFixedDim
+    readonly property color onPrimaryFixedColor: t.onPrimaryFixedColor
+    readonly property color onPrimaryFixedVariantColor: t.onPrimaryFixedVariantColor
+    readonly property color inversePrimary: t.inversePrimary
+    readonly property color secondary: t.secondary
+    readonly property color onSecondaryColor: t.onSecondaryColor
+    readonly property color secondaryContainer: t.secondaryContainer
+    readonly property color onSecondaryContainerColor: t.onSecondaryContainerColor
+    readonly property color secondaryFixed: t.secondaryFixed
+    readonly property color secondaryFixedDim: t.secondaryFixedDim
+    readonly property color onSecondaryFixedColor: t.onSecondaryFixedColor
+    readonly property color onSecondaryFixedVariantColor: t.onSecondaryFixedVariantColor
+    readonly property color tertiary: t.tertiary
+    readonly property color onTertiaryColor: t.onTertiaryColor
+    readonly property color tertiaryContainer: t.tertiaryContainer
+    readonly property color onTertiaryContainerColor: t.onTertiaryContainerColor
+    readonly property color tertiaryFixed: t.tertiaryFixed
+    readonly property color tertiaryFixedDim: t.tertiaryFixedDim
+    readonly property color onTertiaryFixedColor: t.onTertiaryFixedColor
+    readonly property color onTertiaryFixedVariantColor: t.onTertiaryFixedVariantColor
+    readonly property color error: t.error
+    readonly property color onErrorColor: t.onErrorColor
+    readonly property color errorContainer: t.errorContainer
+    readonly property color onErrorContainerColor: t.onErrorContainerColor
+    readonly property color scrim: t.scrim
+    readonly property color shadow: t.shadow
 }

@@ -107,6 +107,38 @@ FadePage {
                         Store.set("themeMode", index);
                     }
                 }
+                Text {
+                    text: "Palette"
+                    color: Theme.onSurfaceColor
+                    font.pixelSize: 16
+                    font.weight: Font.Medium
+                }
+                Flickable {
+                    width: parent.width
+                    height: palette.height
+                    contentWidth: palette.width
+                    contentHeight: palette.height
+                    clip: true
+                    flickableDirection: Flickable.HorizontalFlick
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    MaterialButtonGroup {
+                        id: palette
+                        labels: ThemeLoader.available.map(t => t.name)
+                        variant: MaterialButtonGroup.Connected
+                        sizeStyle: MaterialButtonGroup.Small
+                        selectionMode: MaterialButtonGroup.Single
+                        equalWidth: false
+                        fillWidth: false
+                        currentIndex: Math.max(0, ThemeLoader.available.findIndex(t => t.id === ThemeLoader.current))
+                        color: Theme.surfaceContainer
+                        checkedColor: Theme.secondaryContainer
+                        textColor: Theme.onSurfaceVariantColor
+                        checkedTextColor: Theme.onSecondaryContainerColor
+                        borderColor: Theme.outline
+                        onClicked: index => ThemeLoader.current = ThemeLoader.available[index].id
+                    }
+                }
             }
 
             Divider {}

@@ -75,6 +75,7 @@ set_source_files_properties(theme/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRU
 collect(APP_SOURCES core/*.cpp core/*.h)
 collect(APP_QML components/*.qml pages/*.qml)
 collect(APP_ICONS icons/*.svg)
+collect(APP_THEMES theme/variation/*.ini)
 
 qt_add_qml_module(appEvernight
     URI Evernight
@@ -84,7 +85,7 @@ qt_add_qml_module(appEvernight
         Main.qml
         theme/Theme.qml
         ${APP_QML}
-    RESOURCES ${APP_ICONS}
+    RESOURCES ${APP_ICONS} ${APP_THEMES}
 )
 
 target_include_directories(appEvernight PRIVATE
