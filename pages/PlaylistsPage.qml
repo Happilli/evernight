@@ -121,10 +121,10 @@ FadePage {
                         Rectangle {
                             id: cover
                             readonly property bool liked: cell.modelData.id === "liked"
-                            x: 0
-                            y: 0
-                            width: grid.cellW
-                            height: grid.cellW
+                            x: 4
+                            y: 4
+                            width: grid.cellW - 8
+                            height: grid.cellW - 8
                             color: Theme.secondaryContainer
                             clip: true
 
@@ -146,10 +146,11 @@ FadePage {
                                 sourceSize.height: 400
                             }
                         }
+
                         Column {
-                            x: 12
-                            y: grid.cellW + 8
-                            width: parent.width - 24
+                            x: 16
+                            y: grid.cellW + 4
+                            width: parent.width - 32
                             spacing: 2
 
                             Text {
@@ -171,28 +172,17 @@ FadePage {
 
                         Rectangle {
                             anchors.fill: parent
+                            anchors.margins: 4
                             color: Theme.onSurfaceColor
                             opacity: area.pressed ? 0.08 : 0
                         }
 
                         Rectangle {
-                            anchors.left: parent.left
-                            height: parent.height
-                            width: 1
-                            color: Theme.outlineVariant
-                            visible: cell.index % grid.columns === 0
-                        }
-                        Rectangle {
-                            anchors.right: parent.right
-                            height: parent.height
-                            width: 1
-                            color: Theme.outlineVariant
-                        }
-                        Rectangle {
-                            anchors.bottom: parent.bottom
-                            width: parent.width
-                            height: 1
-                            color: Theme.outlineVariant
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            color: "transparent"
+                            border.width: 1
+                            border.color: Theme.outlineVariant
                         }
 
                         MouseArea {

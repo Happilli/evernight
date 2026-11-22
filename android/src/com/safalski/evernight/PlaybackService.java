@@ -54,6 +54,7 @@ public class PlaybackService extends Service {
     private static long duration;
     private static long position;
     private static boolean playing;
+    private static boolean quitting;
 
     private static native void nativeCommand(int cmd, long arg);
 
@@ -109,6 +110,23 @@ public class PlaybackService extends Service {
         MAIN.post(() -> app.stopService(new Intent(app, PlaybackService.class)));
     }
 
+    public static void shutdown(Context context) {
+        if (live == null) {
+            android.os.Process.killProcess(android.os.Process.myPid());
+            return;
+        }
+        quitting = true;
+        final Context app = context.getApplicationContext();
+        app.stopService(new Intent(app, PlaybackService.class));
+        new Thread(() -> {
+            try {
+                Thread.sleep(1500);
+            } catch (InterruptedException ignored) {
+            }
+            android.os.Process.killProcess(android.os.Process.myPid());
+        }).start();
+    }
+
     private final BroadcastReceiver noisyReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -119,7 +137,6 @@ public class PlaybackService extends Service {
 
     private boolean hasFocus;
     private boolean resumeOnGain;
-
     private final AudioManager.OnAudioFocusChangeListener focusListener = change -> {
         switch (change) {
             case AudioManager.AUDIOFOCUS_GAIN:
@@ -171,20 +188,25 @@ public class PlaybackService extends Service {
     public void onCreate() {
         super.onCreate();
         live = this;
+        quitting = false;
         nm = getSystemService(NotificationManager.class);
         audioManager = getSystemService(AudioManager.class);
+
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID, "Playback", NotificationManager.IMPORTANCE_LOW);
         channel.setShowBadge(false);
         nm.createNotificationChannel(channel);
+
         Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (launch != null)
             openIntent = PendingIntent.getActivity(this, 0, launch,
                     PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+
         prevAction = buildAction(android.R.drawable.ic_media_previous, "Previous", ACTION_PREV, 10);
         playAction = buildAction(android.R.drawable.ic_media_play, "Play", ACTION_PLAY, 11);
         pauseAction = buildAction(android.R.drawable.ic_media_pause, "Pause", ACTION_PAUSE, 12);
         nextAction = buildAction(android.R.drawable.ic_media_next, "Next", ACTION_NEXT, 13);
+
         session = new MediaSession(this, "Evernight");
         session.setCallback(new MediaSession.Callback() {
             @Override public void onPlay() { send(CMD_PLAY, 0); }
@@ -196,6 +218,7 @@ public class PlaybackService extends Service {
         if (openIntent != null)
             session.setSessionActivity(openIntent);
         session.setActive(true);
+
         IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
         if (Build.VERSION.SDK_INT >= 33)
             registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
@@ -224,9 +247,7 @@ public class PlaybackService extends Service {
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        if (!playing)
-            stopSelf();
-        super.onTaskRemoved(rootIntent);
+        shutdown(this);
     }
 
     @Override
@@ -247,6 +268,8 @@ public class PlaybackService extends Service {
         session.setActive(false);
         session.release();
         super.onDestroy();
+        if (quitting)
+            MAIN.postDelayed(() -> android.os.Process.killProcess(android.os.Process.myPid()), 200);
     }
 
     private Notification.Action buildAction(int icon, String label, String name, int code) {
