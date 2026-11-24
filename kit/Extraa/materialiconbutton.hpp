@@ -43,6 +43,8 @@ class MaterialIconButton : public SgMaterialItem {
                  borderColorChanged)
   Q_PROPERTY(qreal borderWidth READ borderWidth WRITE setBorderWidth NOTIFY
                  borderWidthChanged)
+  Q_PROPERTY(bool stateLayer READ stateLayer WRITE setStateLayer NOTIFY
+                 stateLayerChanged)
 
 public:
   enum Type { Filled, Tonal, Outlined, Standard };
@@ -53,6 +55,8 @@ public:
   Q_ENUM(WidthStyle)
   enum Shape { Round, Square };
   Q_ENUM(Shape)
+  bool stateLayer() const { return m_stateLayer; }
+  void setStateLayer(bool v);
 
   explicit MaterialIconButton(QQuickItem *parent = nullptr);
 
@@ -92,6 +96,7 @@ public:
   void setBorderWidth(qreal v);
 
 signals:
+  void stateLayerChanged();
   void typeChanged();
   void sizeStyleChanged();
   void widthStyleChanged();
@@ -113,6 +118,7 @@ signals:
   void toggled();
 
 protected:
+  void mouseDoubleClickEvent(QMouseEvent *e) override;
   void build(Kit::Mesh &m) override;
   bool advance(qreal dt) override;
   QSGNode *updatePaintNode(QSGNode *old, UpdatePaintNodeData *d) override;
@@ -147,6 +153,7 @@ private:
   bool m_checkable = false;
   bool m_checked = false;
   bool m_pressed = false;
+  bool m_stateLayer = true;
   QUrl m_iconSource;
   QString m_iconPath;
   QString m_iconText;

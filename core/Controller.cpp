@@ -458,6 +458,11 @@ Controller::Controller(QObject *parent) : QObject(parent) {
   m_recent = QSettings().value("recent").toStringList();
   connect(this, &Controller::tracksChanged, this, &Controller::recentChanged);
   connect(this, &Controller::tracksChanged, this, &Controller::queueChanged);
+  connect(this, &Controller::currentChanged, this, [this] {
+    m_info.setThumb(m_current >= 0 && m_current < m_tracks.size()
+                        ? m_tracks[m_current].thumb
+                        : QString());
+  });
   loadCache();
   restoreState();
   QTimer::singleShot(0, this, &Controller::scanLibrary);

@@ -1,48 +1,26 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import Evernight.Shapes
 import Evernight.Extraa
 import Evernight
 
 Rectangle {
     id: root
-
     property real p: 0
     property bool dragging: false
     property real startP: 0
     property real lastVy: 0
     property bool blocked: false
-
     signal queueRequested
-
-    readonly property var shapePool: [MaterialShape.Cookie9Sided, MaterialShape.Cookie12Sided, MaterialShape.Cookie6Sided, MaterialShape.Clover4Leaf, MaterialShape.Clover8Leaf, MaterialShape.SoftBurst, MaterialShape.Flower, MaterialShape.Puffy, MaterialShape.PuffyDiamond, MaterialShape.Sunny, MaterialShape.VerySunny, MaterialShape.Pentagon, MaterialShape.Gem, MaterialShape.Ghostish, MaterialShape.Bun, MaterialShape.Heart, MaterialShape.Oval]
-    property int coverShape: MaterialShape.Cookie9Sided
-
-    function pickShape() {
-        let n = coverShape;
-        while (n === coverShape)
-            n = shapePool[Math.floor(Math.random() * shapePool.length)];
-        coverShape = n;
-    }
-
-    Connections {
-        target: Controller
-        function onCurrentChanged() {
-            root.pickShape();
-        }
-    }
-
     readonly property int miniHeight: 76
     readonly property int miniMargin: 12
     readonly property int miniBottom: 16
+    readonly property real sideMargin: 20
     readonly property real pw: parent ? parent.width : 0
     readonly property real ph: parent ? parent.height : 0
     readonly property real travel: Math.max(1, ph - miniHeight - miniBottom)
     readonly property real dragTravel: Math.min(travel, 380)
-    readonly property real artSize: Math.min(pw - 64, ph * 0.34, 300)
-    readonly property real artTop: Math.max(60, (ph - artSize - 420) / 2)
-    readonly property real controlsTop: artTop + artSize + 90
-
+    readonly property real controlsHeight: ctl.height > 0 ? ctl.height : 190
+    readonly property real controlsTop: ph - controlsHeight - 24
     readonly property var track: {
         const t = Controller.tracks;
         const c = Controller.current;
@@ -53,27 +31,19 @@ Rectangle {
         return s !== "";
     }).join(" \u00B7 ") : ""
     readonly property string coverUrl: track && track.thumb ? "file://" + track.thumb : ""
-    readonly property color ringColor: {
-        if (root.coverUrl === "")
-            return "transparent";
-        const a = Controller.info.accent;
-        return Qt.hsla(Math.max(0, a.hslHue), Math.min(0.75, Math.max(0.35, a.hslSaturation)), Theme.dark ? 0.62 : 0.42, 1);
-    }
+    readonly property bool hasCover: coverUrl !== ""
 
     function mix(a, b) {
         return a + (b - a) * p;
     }
-
     function expand() {
         dragging = false;
         p = 1;
     }
-
     function collapse() {
         dragging = false;
         p = 0;
     }
-
     function skip(dir) {
         if (dir > 0 && Controller.player.position > 3000)
             Controller.prev();
@@ -134,46 +104,75 @@ Rectangle {
         }
     }
 
-    MaterialShape {
-        x: root.mix(14, (root.pw - root.artSize) / 2)
-        y: root.mix(12, root.artTop)
-        width: root.mix(44, root.artSize)
-        height: width
-        shape: Controller.playing ? root.coverShape : MaterialShape.Circle
-        color: Theme.secondaryContainer
+    Image {
+        id: cover
+        x: 0
+        y: 0
+        width: parent.width
+        height: root.controlsTop + 60
         source: root.coverUrl
-        glyph: root.coverUrl !== "" ? "" : "\u266A"
-        glyphColor: Theme.onSurfaceColor
-        glyphSize: root.mix(20, 96)
-        border.width: root.coverUrl !== "" ? root.mix(2, 3) : 0
-        border.color: root.ringColor
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        cache: true
+        smooth: true
+        opacity: root.p
+        visible: root.hasCover && opacity > 0
+    }
+
+    Rectangle {
+        width: parent.width
+        height: cover.height * 0.55
+        y: cover.height - height
+        opacity: root.p
+        visible: root.hasCover && opacity > 0
+        gradient: Gradient {
+            GradientStop {
+                position: 0.0
+                color: Qt.alpha(Theme.background, 0)
+            }
+            GradientStop {
+                position: 1.0
+                color: Theme.background
+            }
+        }
+    }
+
+    Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: root.controlsTop / 2 - height / 2
+        text: "\u266A"
+        font.pixelSize: 120
+        color: Theme.onSurfaceVariantColor
+        opacity: root.p
+        visible: !root.hasCover && opacity > 0
     }
 
     Text {
         id: title
-        width: root.mix(root.pw - 252, root.pw - 64)
-        x: root.mix(68, 32)
-        y: root.mix(16, root.artTop + root.artSize + 18)
-        horizontalAlignment: root.p > 0.5 ? Text.AlignHCenter : Text.AlignLeft
+        width: root.pw - 184
+        x: 20
+        y: 16
         elide: Text.ElideRight
         maximumLineCount: 1
         color: Theme.onSurfaceColor
-        font.pixelSize: Math.round(root.mix(15, 24))
+        font.pixelSize: 15
         font.weight: Font.Medium
         text: root.titleText
+        opacity: Math.max(0, 1 - root.p * 3)
+        visible: opacity > 0
     }
 
     Text {
-        id: sub
         width: title.width
         x: title.x
-        y: title.y + root.mix(20, 34)
-        horizontalAlignment: title.horizontalAlignment
+        y: title.y + 20
         elide: Text.ElideRight
         maximumLineCount: 1
         color: Theme.onSurfaceVariantColor
-        font.pixelSize: Math.round(root.mix(13, 16))
+        font.pixelSize: 13
         text: root.subText
+        opacity: title.opacity
+        visible: opacity > 0
     }
 
     Row {
@@ -185,7 +184,6 @@ Rectangle {
         opacity: Math.max(0, 1 - root.p * 3)
         visible: opacity > 0
         enabled: root.p < 0.3
-
         MaterialIconButton {
             type: MaterialIconButton.Tonal
             sizeStyle: MaterialIconButton.Small
@@ -194,7 +192,6 @@ Rectangle {
             iconSource: "../icons/prev.svg"
             onClicked: Controller.prev()
         }
-
         MaterialIconButton {
             type: MaterialIconButton.Filled
             sizeStyle: MaterialIconButton.Small
@@ -203,7 +200,6 @@ Rectangle {
             iconSource: Controller.playing ? "../icons/pause.svg" : "../icons/play.svg"
             onClicked: Controller.toggle()
         }
-
         MaterialIconButton {
             type: MaterialIconButton.Tonal
             sizeStyle: MaterialIconButton.Small
@@ -223,7 +219,6 @@ Rectangle {
         color: Theme.surfaceContainerHighest
         opacity: Math.max(0, 1 - root.p * 3)
         visible: opacity > 0
-
         Rectangle {
             height: parent.height
             radius: parent.radius
@@ -232,19 +227,32 @@ Rectangle {
         }
     }
 
+    NowPlayingActions {
+        x: root.pw - root.sideMargin - width + 8
+        y: root.controlsTop - height - 8
+        coverMode: root.hasCover
+        opacity: Math.max(0, root.p * 2 - 1)
+        visible: opacity > 0
+        enabled: root.p > 0.6
+    }
+
     Loader {
-        x: 32
+        id: ctl
+        x: root.sideMargin
         y: root.controlsTop
-        width: root.pw - 64
+        width: root.pw - 2 * root.sideMargin
         active: root.visible
         asynchronous: true
         opacity: Math.max(0, root.p * 2 - 1)
         visible: opacity > 0
         enabled: root.p > 0.6
-
         sourceComponent: NowPlayingControls {
             pw: root.pw
+            sideMargin: root.sideMargin
+            coverMode: root.hasCover
             trackUri: root.track ? root.track.uri : ""
+            titleText: root.titleText
+            subText: root.subText
             onQueueRequested: root.queueRequested()
             onSkipRequested: dir => root.skip(dir)
         }

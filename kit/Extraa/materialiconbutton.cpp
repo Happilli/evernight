@@ -102,6 +102,13 @@ void MaterialIconButton::setType(Type v) {
   assign(m_type, v, &MaterialIconButton::typeChanged);
 }
 
+void MaterialIconButton::setStateLayer(bool v) {
+  assign(m_stateLayer, v, &MaterialIconButton::stateLayerChanged);
+}
+
+void MaterialIconButton::mouseDoubleClickEvent(QMouseEvent *e) {
+  mousePressEvent(e);
+}
 void MaterialIconButton::setSizeStyle(SizeStyle v) {
   if (assign(m_sizeStyle, v, &MaterialIconButton::sizeStyleChanged))
     updateImplicit();
@@ -204,11 +211,10 @@ void MaterialIconButton::mousePressEvent(QMouseEvent *e) {
 }
 
 void MaterialIconButton::mouseReleaseEvent(QMouseEvent *e) {
-  if (!m_pressed)
-    return;
   const bool inside = contains(e->position());
+  const bool was = m_pressed;
   setPressed(false);
-  if (inside)
+  if (was && inside)
     activate();
   e->accept();
 }
@@ -279,7 +285,7 @@ void MaterialIconButton::build(Kit::Mesh &m) {
     m.strokeRoundedRect(rect, radius, radius, radius, radius, m.snapStroke(bw),
                         m_borderColor);
 
-  const qreal layer = Kit::stateLayer(m_pressed);
+  const qreal layer = m_stateLayer ? Kit::stateLayer(m_pressed) : 0.0;
   if (layer > 0.0)
     m.fillRoundedRect(rect, radius, radius, radius, radius,
                       Kit::withAlpha(fg, layer));

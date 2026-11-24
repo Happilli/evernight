@@ -27,6 +27,11 @@ QColor MediaInfo::dominant(const QImage &img) {
   return QColor::fromRgbF(r / wsum, g / wsum, b / wsum);
 }
 
+void MediaInfo::setThumb(const QString &path) {
+  const QImage img(path);
+  m_thumbAccent = img.isNull() ? QColor() : dominant(img);
+  emit thumbAccentChanged();
+}
 void MediaInfo::setMetaData(const QMediaMetaData &meta) {
   m_meta = meta;
   const QString title = text(QMediaMetaData::Title);

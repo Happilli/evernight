@@ -18,10 +18,13 @@ class MediaInfo : public QObject {
   Q_PROPERTY(bool hasCover READ hasCover NOTIFY changed)
   Q_PROPERTY(QImage cover READ cover NOTIFY changed)
   Q_PROPERTY(QColor accent READ accent NOTIFY changed)
+  Q_PROPERTY(QColor thumbAccent READ thumbAccent NOTIFY thumbAccentChanged)
 
 public:
   using QObject::QObject;
 
+  QColor thumbAccent() const { return m_thumbAccent; }
+  void setThumb(const QString &path);
   QMediaMetaData metaData() const { return m_meta; }
   QString title() const { return m_title; }
   QString artist() const { return m_artist; }
@@ -35,8 +38,10 @@ public:
 
 signals:
   void changed();
+  void thumbAccentChanged();
 
 private:
+  QColor m_thumbAccent;
   QString text(QMediaMetaData::Key key) const;
   static QColor dominant(const QImage &img);
 

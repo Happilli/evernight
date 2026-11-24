@@ -1,5 +1,4 @@
 #include "./Player.h"
-
 #ifdef Q_OS_ANDROID
 #include <QCoreApplication>
 #include <QJniEnvironment>
@@ -7,7 +6,6 @@
 #endif
 
 namespace {
-
 #ifdef Q_OS_ANDROID
 int openDescriptor(const QUrl &url) {
   QJniEnvironment env;
@@ -41,7 +39,6 @@ int openDescriptor(const QUrl &url) {
   return fd;
 }
 #endif
-
 } // namespace
 
 Player::Player(QObject *parent) : QObject(parent) {
@@ -66,6 +63,22 @@ Player::Player(QObject *parent) : QObject(parent) {
             if (status == QMediaPlayer::EndOfMedia)
               emit ended();
           });
+  connect(&m_player, &QMediaPlayer::mediaStatusChanged, this,
+          [this](QMediaPlayer::MediaStatus s) {
+            if (s == QMediaPlayer::LoadingMedia)
+              m_loadSeen = true;
+            if (m_wantPlay && m_loadSeen &&
+                m_player.playbackState() != QMediaPlayer::PlayingState &&
+                (s == QMediaPlayer::LoadedMedia ||
+                 s == QMediaPlayer::BufferedMedia))
+              m_player.play();
+          });
+  connect(
+      &m_player, &QMediaPlayer::mediaStatusChanged, this,
+      [](QMediaPlayer::MediaStatus s) { qWarning("ev-t status %d", int(s)); });
+  connect(
+      &m_player, &QMediaPlayer::playbackStateChanged, this,
+      [](QMediaPlayer::PlaybackState s) { qWarning("ev-t state %d", int(s)); });
 }
 
 QString Player::errorString() const {
@@ -104,16 +117,39 @@ bool Player::open(const QUrl &url) {
   auto file = openDevice(url);
   if (!file)
     return fail(QStringLiteral("cannot open source"));
-  close();
+  m_player.stop();
+  m_wantPlay = false;
   m_error.clear();
   m_file = std::move(file);
+  m_loadSeen = false;
   m_player.setSourceDevice(m_file.get(), url);
   emit errorChanged();
   return true;
 }
 
 void Player::close() {
+  m_wantPlay = false;
   m_player.stop();
   m_player.setSource(QUrl());
   m_file.reset();
+}
+
+void Player::play() {
+  m_wantPlay = true;
+  if (!m_loadSeen)
+    return;
+  const auto s = m_player.mediaStatus();
+  if (s == QMediaPlayer::LoadedMedia || s == QMediaPlayer::BufferedMedia ||
+      s == QMediaPlayer::EndOfMedia)
+    m_player.play();
+}
+
+void Player::pause() {
+  m_wantPlay = false;
+  m_player.pause();
+}
+
+void Player::stop() {
+  m_wantPlay = false;
+  m_player.stop();
 }

@@ -25,9 +25,9 @@ public:
 
   Q_INVOKABLE bool open(const QUrl &url);
   Q_INVOKABLE void close();
-  Q_INVOKABLE void play() { m_player.play(); }
-  Q_INVOKABLE void pause() { m_player.pause(); }
-  Q_INVOKABLE void stop() { m_player.stop(); }
+  Q_INVOKABLE void play();
+  Q_INVOKABLE void pause();
+  Q_INVOKABLE void stop();
 
   std::unique_ptr<QFile> openDevice(const QUrl &url);
 
@@ -56,4 +56,6 @@ private:
   std::unique_ptr<QFile> m_file;
   QString m_error;
   qint64 m_lastPos = 0;
+  bool m_wantPlay = false;
+  bool m_loadSeen = false;
 };
