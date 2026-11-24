@@ -67,7 +67,7 @@ Column {
             style: WavyProgress.Linear
             indeterminate: false
             progress: bar.shown
-            animated: Controller.playing && !seek.pressed && !bar.holding
+            animated: Controller.playing && !seek.pressed
             color: Theme.onSurfaceColor
             trackColor: Theme.surfaceContainerHighest
             wavelength: 28

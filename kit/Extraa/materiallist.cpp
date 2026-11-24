@@ -174,8 +174,16 @@ void MaterialList::onFlick() {
   if (f != m_bFirst || l != m_bLast)
     update();
 }
-
+void MaterialList::watchAncestors() {
+  for (const QMetaObject::Connection &c : std::as_const(m_ancConns))
+    disconnect(c);
+  m_ancConns.clear();
+  for (QQuickItem *p = parentItem(); p; p = p->parentItem())
+    m_ancConns << connect(p, &QQuickItem::yChanged, this,
+                          &MaterialList::onFlick);
+}
 void MaterialList::attachFlickable() {
+  watchAncestors();
   QQuickItem *found = nullptr;
   for (QQuickItem *p = parentItem(); p; p = p->parentItem()) {
     const QMetaObject *mo = p->metaObject();
@@ -198,7 +206,7 @@ void MaterialList::attachFlickable() {
 
 void MaterialList::itemChange(ItemChange change, const ItemChangeData &data) {
   SgMaterialItem::itemChange(change, data);
-  if (change == ItemParentHasChanged)
+  if (change == ItemParentHasChanged || change == ItemSceneChange)
     attachFlickable();
 }
 

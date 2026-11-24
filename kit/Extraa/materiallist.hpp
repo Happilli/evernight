@@ -201,6 +201,9 @@ private:
   qreal baseHeight(int i) const;
   qreal rowHeight(int i) const;
   qreal leadingWidth(int i) const;
+  QList<QMetaObject::Connection> m_ancConns;
+
+  void watchAncestors();
   bool canExpand(int i) const;
   void ensureDetail(int i);
   void retargetExtra(int i);
