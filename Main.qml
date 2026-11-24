@@ -11,13 +11,28 @@ Window {
     title: "Evernight"
     color: Theme.background
 
-    Binding {
-        target: Controller.spectrum
-        property: "wanted"
-        value: np.p <= 0.02 && view.currentIndex === 0 && Qt.application.state === Qt.ApplicationActive
+    property int frames: 0
+
+    Connections {
+        target: root
+        function onFrameSwapped() {
+            frames++;
+        }
     }
+
+    Timer {
+        interval: 1000
+        running: true
+        repeat: true
+        onTriggered: {
+            console.log("fps", frames);
+            frames = 0;
+        }
+    }
+
     property string detailId: ""
     readonly property real playerInset: np.visible ? np.miniHeight + np.miniBottom + 12 : 0
+
     function handleBack() {
         if (queueSheet.open) {
             queueSheet.open = false;
@@ -41,16 +56,19 @@ Window {
         }
         return homePage.handleBack() || playlistsPage.handleBack();
     }
+
     onClosing: close => {
         if (handleBack())
             close.accepted = false;
     }
+
     Binding {
         target: view
         property: "interactive"
         value: false
         when: np.p > 0.02
     }
+
     AppTabs {
         id: tabs
         anchors.top: parent.top
@@ -63,6 +81,7 @@ Window {
                 view.currentIndex = currentIndex;
         }
     }
+
     ListView {
         id: view
         anchors.top: tabs.bottom
@@ -81,10 +100,10 @@ Window {
         flickDeceleration: 1500
         maximumFlickVelocity: 2500
         cacheBuffer: width * 3
+
         model: ObjectModel {
             HomePage {
                 id: homePage
-                eqPaused: np.p > 0.02
                 onSongLongPressed: (uri, title, artist, playlistId) => songSheet.openFor(uri, title, artist, playlistId)
             }
             PlaylistsPage {
@@ -99,11 +118,13 @@ Window {
                 sourceComponent: SettingsPage {}
             }
         }
+
         onCurrentIndexChanged: {
             if (tabs.currentIndex !== currentIndex)
                 tabs.currentIndex = currentIndex;
         }
     }
+
     Loader {
         id: detailLoader
         readonly property PlaylistDetail page: item as PlaylistDetail
@@ -116,12 +137,14 @@ Window {
             }
         }
     }
+
     Binding {
         target: detailLoader.item
         property: "playlistId"
         value: root.detailId
         when: detailLoader.item !== null
     }
+
     Connections {
         target: detailLoader.item
         ignoreUnknownSignals: true
@@ -138,6 +161,7 @@ Window {
             songSheet.openFor(uri, title, artist, playlistId);
         }
     }
+
     NowPlaying {
         id: np
         blocked: queueSheet.open
@@ -145,21 +169,26 @@ Window {
             queueSheet.open = true;
         }
     }
+
     Item {
         id: overlayLayer
         anchors.fill: parent
+
         SongSheet {
             id: songSheet
             anchors.fill: parent
         }
+
         QueueSheet {
             id: queueSheet
             anchors.fill: parent
         }
+
         PlaylistDialog {
             id: playlistDialog
             anchors.fill: parent
         }
+
         MaterialSnackbar {
             id: snack
             anchors.fill: parent
@@ -177,6 +206,7 @@ Window {
                     Playlists.add(listId, songUri);
             }
         }
+
         Connections {
             target: Snack
             function onRequested(message, kind, listId, songUri) {

@@ -6,6 +6,7 @@ MaterialSheet {
     id: sheet
 
     property var items: []
+
     readonly property int curPos: {
         const t = Controller.tracks;
         const c = Controller.current;
@@ -67,6 +68,7 @@ MaterialSheet {
             Column {
                 width: parent.width
                 spacing: 2
+
                 Text {
                     width: parent.width
                     text: "Up next"
@@ -74,6 +76,7 @@ MaterialSheet {
                     font.pixelSize: 20
                     font.weight: Font.Medium
                 }
+
                 Text {
                     width: parent.width
                     text: sheet.items.length + (sheet.items.length === 1 ? " song" : " songs") + (Controller.shuffle ? " \u00B7 Shuffle is on, order may differ" : "")
@@ -95,8 +98,6 @@ MaterialSheet {
                 avatarColor: Theme.secondaryContainer
                 avatarTextColor: Theme.onSurfaceColor
                 dividerColor: Theme.outlineVariant
-                equalizerIndex: sheet.curPos
-                equalizerLevels: Controller.spectrum.levels
                 checkedIndices: sheet.curPos >= 0 ? [sheet.curPos] : []
                 model: sheet.items.map(function (t) {
                     return {

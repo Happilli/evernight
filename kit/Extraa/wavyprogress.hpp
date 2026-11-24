@@ -4,16 +4,18 @@
 #include <QElapsedTimer>
 #include <QMetaObject>
 #include <QQuickWindow>
+#include <QTimer>
 
 class WavyProgress : public SgItem {
   Q_OBJECT
   QML_ELEMENT
-
   Q_PROPERTY(Style style READ style WRITE setStyle NOTIFY styleChanged)
   Q_PROPERTY(
       qreal progress READ progress WRITE setProgress NOTIFY progressChanged)
   Q_PROPERTY(bool indeterminate READ indeterminate WRITE setIndeterminate NOTIFY
                  indeterminateChanged)
+  Q_PROPERTY(
+      bool animated READ animated WRITE setAnimated NOTIFY animatedChanged)
   Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
   Q_PROPERTY(QColor trackColor READ trackColor WRITE setTrackColor NOTIFY
                  trackColorChanged)
@@ -36,6 +38,7 @@ public:
   Style style() const { return m_style; }
   qreal progress() const { return m_progress; }
   bool indeterminate() const { return m_indeterminate; }
+  bool animated() const { return m_animated; }
   QColor color() const { return m_color; }
   QColor trackColor() const { return m_trackColor; }
   qreal amplitude() const { return m_amp; }
@@ -47,6 +50,7 @@ public:
   void setStyle(Style v);
   void setProgress(qreal v);
   void setIndeterminate(bool v);
+  void setAnimated(bool v);
   void setColor(const QColor &v);
   void setTrackColor(const QColor &v);
   void setAmplitude(qreal v);
@@ -59,6 +63,7 @@ signals:
   void styleChanged();
   void progressChanged();
   void indeterminateChanged();
+  void animatedChanged();
   void colorChanged();
   void trackColorChanged();
   void amplitudeChanged();
@@ -75,6 +80,8 @@ protected:
   void propertyAssigned() override;
 
 private:
+  qreal targetAmp() const { return m_animated ? m_amp : 0.0; }
+  bool needsFrames() const;
   void syncFrames(QQuickWindow *w);
   void onFrame();
   void segment(qreal &a, qreal &b) const;
@@ -84,16 +91,17 @@ private:
   Style m_style = Linear;
   qreal m_progress = 0.0;
   bool m_indeterminate = true;
+  bool m_animated = true;
   QColor m_color = QColor("#6750A4");
   QColor m_trackColor = QColor("#E8DEF8");
   qreal m_amp = 3.0;
+  qreal m_ampNow = 0.0;
   qreal m_wavelength = 28.0;
   qreal m_waveSpeed = 0.8;
   qreal m_stroke = 4.0;
   qreal m_gap = 4.0;
-
   qreal m_phase = 0.0;
   qreal m_time = 0.0;
   QElapsedTimer m_clock;
-  QMetaObject::Connection m_conn;
+  QTimer m_timer;
 };

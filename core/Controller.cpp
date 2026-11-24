@@ -13,6 +13,7 @@
 #include <QTimer>
 #include <QtGlobal>
 #include <memory>
+
 #ifdef Q_OS_ANDROID
 #include <QDir>
 #include <QFile>
@@ -245,6 +246,7 @@ void requestPermissions(const QStringList &names) {
     env.checkAndClearExceptions();
   });
 }
+
 void trimBars(const QString &path) {
   QImage img(path);
   if (img.isNull())
@@ -267,6 +269,7 @@ void trimBars(const QString &path) {
     return;
   img.copy(0, top, img.width(), h).save(path, "JPG", 90);
 }
+
 QString thumbFor(const QJniObject &ctx, qint64 id) {
   const QString dir =
       QStandardPaths::writableLocation(QStandardPaths::CacheLocation) +
@@ -365,11 +368,6 @@ QList<Row> queryMusicFolder() {
 } // namespace
 
 Controller::Controller(QObject *parent) : QObject(parent) {
-  connect(&m_spectrum, &Spectrum::activeChanged, this, [this](bool on) {
-    m_player.attach(on ? m_spectrum.output() : nullptr);
-  });
-  connect(&m_player, &Player::positionChanged, this,
-          [this] { m_spectrum.setPosition(m_player.position()); });
   connect(&m_player, &Player::metaDataChanged, this,
           [this] { m_info.setMetaData(m_player.metaData()); });
   connect(&m_player, &Player::stateChanged, this, [this] {
@@ -377,14 +375,12 @@ Controller::Controller(QObject *parent) : QObject(parent) {
       m_switching = false;
     else if (m_switching)
       return;
-    m_spectrum.setActive(playing());
     emit playingChanged();
   });
   connect(&m_player, &Player::statusChanged, this, [this] {
     if (!m_switching || m_player.status() != QMediaPlayer::InvalidMedia)
       return;
     m_switching = false;
-    m_spectrum.setActive(false);
     emit playingChanged();
   });
   connect(&m_player, &Player::ended, this, &Controller::onEnded);
@@ -643,6 +639,7 @@ void Controller::play(int index) {
       saveState(true);
   });
 }
+
 void Controller::playAt(int index) {
   m_queue.clear();
   emit queueChanged();
@@ -840,6 +837,7 @@ QVariantList Controller::search(const QString &query) {
     out.append(p.second);
   return out;
 }
+
 QVariantList Controller::queue() const {
   const int n = queueSize();
   QVariantList out;

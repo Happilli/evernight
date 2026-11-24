@@ -4,7 +4,7 @@ import Evernight
 
 FadePage {
     id: page
-    property bool eqPaused: false
+
     property var matches: []
     property var recent: []
     property bool fromCarousel: false
@@ -15,6 +15,7 @@ FadePage {
     function refresh() {
         matches = Controller.search("");
     }
+
     function refreshRecent() {
         recent = Controller.recent;
     }
@@ -30,6 +31,7 @@ FadePage {
         interval: 900
         onTriggered: page.fromCarousel = false
     }
+
     Component.onCompleted: {
         refresh();
         refreshRecent();
@@ -37,15 +39,18 @@ FadePage {
 
     Connections {
         target: Controller
+
         function onTracksChanged() {
             page.refresh();
             if (!page.fromCarousel)
                 page.refreshRecent();
         }
+
         function onRecentChanged() {
             if (!page.fromCarousel)
                 page.refreshRecent();
         }
+
         function onInspected(uri, rows) {
             if (rows.length > 0)
                 page.infoCache[uri] = rows;
@@ -118,6 +123,7 @@ FadePage {
                     return;
                 page.playFromCarousel(i);
             }
+
             Timer {
                 id: settle
                 interval: 350
@@ -172,7 +178,6 @@ FadePage {
                 avatarTextColor: Theme.onSurfaceColor
                 dividerColor: Theme.outlineVariant
                 selectionMode: MaterialList.Single
-                equalizerIndex: page.shownCurrent
                 model: {
                     const t = Controller.tracks;
                     return page.matches.map(function (i) {
@@ -196,23 +201,6 @@ FadePage {
                 onExpandRequested: (index, item) => {
                     Controller.inspect(Controller.tracks[page.matches[index]].uri);
                 }
-
-                MaterialEqualizer {
-                    id: eq
-                    visible: songList.equalizerRect.width > 0
-                    x: songList.equalizerRect.x
-                    y: songList.equalizerRect.y
-                    width: songList.equalizerRect.width
-                    height: songList.equalizerRect.height
-                    color: Theme.onSurfaceColor
-
-                    Binding {
-                        target: eq
-                        property: "levels"
-                        value: Controller.spectrum.levels
-                        when: !page.eqPaused
-                    }
-                }
             }
 
             Item {
@@ -230,6 +218,7 @@ FadePage {
                         color: Theme.onSurfaceColor
                         font.pixelSize: 18
                     }
+
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "Put music in your Music folder"

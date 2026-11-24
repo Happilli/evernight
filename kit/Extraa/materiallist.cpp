@@ -18,6 +18,7 @@
 #include <cmath>
 
 namespace {
+
 constexpr qreal kHeight[] = {56.0, 56.0, 72.0, 88.0};
 constexpr qreal kPad = 16.0;
 constexpr qreal kGap = 16.0;
@@ -33,9 +34,6 @@ constexpr qreal kDivider = 1.0;
 constexpr qreal kOverlineLh = 16.0;
 constexpr qreal kHeadlineLh = 24.0;
 constexpr qreal kSupportLh = 20.0;
-constexpr qreal kEqBarW = 4.0;
-constexpr qreal kEqBarGap = 3.0;
-constexpr qreal kEqMinH = 4.0;
 constexpr qreal kBuffer = 160.0;
 constexpr qreal kLabelW = 88.0;
 constexpr qreal kDetailGap = 12.0;
@@ -134,6 +132,7 @@ QImage loadThumb(const QString &path, int px, qreal dpr) {
   out.setDevicePixelRatio(dpr);
   return out;
 }
+
 } // namespace
 
 MaterialList::MaterialList(QQuickItem *parent)
@@ -162,12 +161,18 @@ void MaterialList::componentComplete() {
   SgMaterialItem::componentComplete();
   attachFlickable();
   update();
-  updateEqRect();
 }
 
 void MaterialList::onFlick() {
-  update();
-  updateEqRect();
+  int f = 0, l = -1;
+  if (visibleRows(f, l))
+    l = std::min(l, f + kWindow - 1);
+  else {
+    f = -1;
+    l = -2;
+  }
+  if (f != m_bFirst || l != m_bLast)
+    update();
 }
 
 void MaterialList::attachFlickable() {
@@ -190,32 +195,13 @@ void MaterialList::attachFlickable() {
     m_flickConn =
         connect(found, SIGNAL(contentYChanged()), this, SLOT(onFlick()));
 }
+
 void MaterialList::itemChange(ItemChange change, const ItemChangeData &data) {
   SgMaterialItem::itemChange(change, data);
   if (change == ItemParentHasChanged)
     attachFlickable();
 }
 
-void MaterialList::updateEqRect() {
-  QRectF r;
-  const int i = m_eqIndex;
-  if (i >= 0 && i < int(m_items.size()) && i < int(m_tops.size()) &&
-      !m_items[i].divider) {
-    bool show = true;
-    if (int(m_items.size()) > kWindow) {
-      int f = 0, l = -1;
-      show = visibleRows(f, l) && i >= f && i <= std::min(l, f + kWindow - 1);
-    }
-    if (show) {
-      const qreal S = m_items[i].imagePath.isEmpty() ? kAvatar : kImage;
-      r = QRectF(kPad, m_tops[i] + baseHeight(i) / 2.0 - S / 2.0, S, S);
-    }
-  }
-  if (m_eqRect == r)
-    return;
-  m_eqRect = r;
-  emit equalizerRectChanged();
-}
 void MaterialList::geometryChange(const QRectF &n, const QRectF &o) {
   QQuickItem::geometryChange(n, o);
   if (n.size() == o.size())
@@ -257,10 +243,7 @@ qreal MaterialList::rowHeight(int i) const {
 
 qreal MaterialList::leadingWidth(int i) const {
   const Entry &e = m_items[i];
-  const bool hasImage = !e.imagePath.isEmpty();
-  if (i == m_eqIndex)
-    return (hasImage ? kImage : kAvatar) + kGap;
-  if (hasImage)
+  if (!e.imagePath.isEmpty())
     return kImage + kGap;
   if (!e.avatarText.isEmpty())
     return kAvatar + kGap;
@@ -421,7 +404,6 @@ void MaterialList::relayout() {
   setImplicitHeight(std::ceil(std::max(0.0, y)));
   update();
   syncHighlight();
-  updateEqRect();
 }
 
 void MaterialList::structureChanged() {
@@ -467,7 +449,6 @@ bool MaterialList::visibleRows(int &first, int &last) const {
   const int n = int(m_items.size());
   if (n == 0)
     return false;
-
   qreal top = 0.0;
   qreal bottom = height();
   if (window()) {
@@ -548,12 +529,13 @@ void MaterialList::requestThumb(const QString &key, const QString &path, int px,
 }
 
 bool MaterialList::advance(qreal dt) {
-  bool active = step(m_press, dt);
-  active |= Kit::stepSpring(m_hlY, springStiffness(), 1.0, dt, 0.05);
-  active |= Kit::stepSpring(m_hlH, springStiffness(), 1.0, dt, 0.05);
-  active |= Kit::stepSpring(m_hlA, springStiffness(), 1.0, dt, 0.001);
+  const bool a0 = step(m_press, dt);
+  const bool a1 = Kit::stepSpring(m_hlY, springStiffness(), 1.0, dt, 0.05);
+  const bool a2 = Kit::stepSpring(m_hlH, springStiffness(), 1.0, dt, 0.05);
+  const bool a3 = Kit::stepSpring(m_hlA, springStiffness(), 1.0, dt, 0.001);
+  bool active = a0 || a1 || a2 || a3;
+  bool any = false;
   if (m_extBusy) {
-    bool any = false;
     for (Entry &e : m_items)
       any |= step(e.ext, dt, 0.05);
     m_extBusy = any;
@@ -708,18 +690,6 @@ void MaterialList::setDividerColor(const QColor &v) {
   assign(m_dividerColor, v, &MaterialList::dividerColorChanged);
 }
 
-void MaterialList::setEqualizerIndex(int v) {
-  if (assign(m_eqIndex, v, &MaterialList::equalizerIndexChanged))
-    updateEqRect();
-}
-
-void MaterialList::setEqualizerLevels(const QList<qreal> &v) {
-  if (m_eqLevels == v)
-    return;
-  m_eqLevels = v;
-  emit equalizerLevelsChanged();
-}
-
 void MaterialList::mousePressEvent(QMouseEvent *e) {
   if (!isEnabled()) {
     e->ignore();
@@ -737,12 +707,16 @@ void MaterialList::mousePressEvent(QMouseEvent *e) {
   }
   m_pressIndex = i;
   m_pressShown = i;
-  m_press.go(1.0);
-  animate();
   m_held = false;
   m_holdTimer.start();
   m_pressClock.restart();
-  QTimer::singleShot(100, this, [this] { update(); });
+  QTimer::singleShot(100, this, [this, i] {
+    if (m_pressIndex == i) {
+      m_press.go(1.0);
+      animate();
+    }
+    update();
+  });
   update();
   e->accept();
 }
@@ -800,12 +774,17 @@ void MaterialList::mouseUngrabEvent() {
 
 void MaterialList::build(Kit::Mesh &m) {
   const int n = int(m_items.size());
+  m_bFirst = -1;
+  m_bLast = -2;
   if (n == 0 || width() <= 0.0)
     return;
   int first = 0, last = -1;
   if (!visibleRows(first, last))
     return;
   last = std::min(last, first + kWindow - 1);
+  m_bFirst = first;
+  m_bLast = last;
+
   const qreal dpr = m.dpr();
   const qreal fd = fade();
   const qreal w = width();
@@ -884,13 +863,7 @@ void MaterialList::build(Kit::Mesh &m) {
     qreal xl = r.left() + kPad;
     qreal xr = r.right() - kPad;
     const bool hasImage = !e.imagePath.isEmpty();
-    if (i == m_eqIndex) {
-      const qreal S = hasImage ? kImage : kAvatar;
-      const qreal rad = hasImage ? kImageR : S / 2.0;
-      m.fillRoundedRect(QRectF(xl, cy - S / 2.0, S, S), rad, rad, rad, rad,
-                        d(m_avatarColor));
-      xl += S + kGap;
-    } else if (hasImage) {
+    if (hasImage) {
       const QString key =
           e.imagePath + QLatin1Char('@') + QString::number(thumbPx);
       wanted.insert(key);
@@ -981,7 +954,6 @@ void MaterialList::build(Kit::Mesh &m) {
       lines[ln++] = {kSlotHeadline, &e.eHead, &headF, kHeadlineLh, fg};
     if (!e.supporting.isEmpty())
       lines[ln++] = {kSlotSupporting, &e.eSup, &supF, kSupportLh, sup};
-
     qreal total = 0.0;
     for (int k = 0; k < ln; ++k)
       total += lines[k].lh;

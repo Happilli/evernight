@@ -1,5 +1,6 @@
 #include "./materialshape.hpp"
 #include "../Core/paintutil.hpp"
+#include <QElapsedTimer>
 #include <QPainter>
 #include <QPen>
 #include <QQmlEngine>
@@ -507,6 +508,17 @@ void MaterialShape::rebuildPath() {
 }
 
 void MaterialShape::paint(QPainter *p) {
+  static int n = 0;
+  static QElapsedTimer t;
+  if (!t.isValid())
+    t.start();
+  ++n;
+  if (t.elapsed() >= 1000) {
+    qInfo("MaterialShape paints/s=%d morphing=%d size=%.0fx%.0f", n,
+          int(m_morphing), width(), height());
+    n = 0;
+    t.restart();
+  }
   if (m_pathDirty)
     rebuildPath();
   if (m_path.isEmpty())

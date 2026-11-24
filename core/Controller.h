@@ -1,5 +1,4 @@
 #pragma once
-#include "./Spectrum.h"
 #include "DiscordPresence.h"
 #include "MediaInfo.h"
 #include "Player.h"
@@ -16,7 +15,6 @@ class Controller : public QObject {
   QML_SINGLETON
   Q_PROPERTY(Player *player READ player CONSTANT)
   Q_PROPERTY(MediaInfo *info READ info CONSTANT)
-  Q_PROPERTY(Spectrum *spectrum READ spectrum CONSTANT)
   Q_PROPERTY(DiscordPresence *discord READ discord CONSTANT)
   Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
   Q_PROPERTY(int current READ current NOTIFY currentChanged)
@@ -34,7 +32,6 @@ public:
 
   Player *player() { return &m_player; }
   MediaInfo *info() { return &m_info; }
-  Spectrum *spectrum() { return &m_spectrum; }
   DiscordPresence *discord() { return &m_discord; }
   QVariantList tracks() const;
   QVariantList recent() const;
@@ -46,12 +43,11 @@ public:
   bool shuffle() const { return m_shuffle; }
   int repeatMode() const { return m_repeatMode; }
   bool autoNext() const { return m_autoNext; }
-
   void setShuffle(bool value);
   void setRepeatMode(int value);
   void setAutoNext(bool value);
-  Q_INVOKABLE void playFromQueue(int pos);
 
+  Q_INVOKABLE void playFromQueue(int pos);
   Q_INVOKABLE void playAt(int index);
   Q_INVOKABLE void playQueue(const QStringList &uris, int start);
   Q_INVOKABLE void toggle();
@@ -80,6 +76,7 @@ private:
   };
   QList<Norm> m_norm;
   bool m_normDirty = true;
+
   struct Track {
     QUrl url;
     QString title;
@@ -101,7 +98,6 @@ private:
 
   Player m_player;
   MediaInfo m_info;
-  Spectrum m_spectrum;
   DiscordPresence m_discord;
   QList<Track> m_tracks;
   QStringList m_recent;

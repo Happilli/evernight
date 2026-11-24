@@ -12,6 +12,7 @@ Rectangle {
     property real startP: 0
     property real lastVy: 0
     property bool blocked: false
+
     signal queueRequested
 
     readonly property var shapePool: [MaterialShape.Cookie9Sided, MaterialShape.Cookie12Sided, MaterialShape.Cookie6Sided, MaterialShape.Clover4Leaf, MaterialShape.Clover8Leaf, MaterialShape.SoftBurst, MaterialShape.Flower, MaterialShape.Puffy, MaterialShape.PuffyDiamond, MaterialShape.Sunny, MaterialShape.VerySunny, MaterialShape.Pentagon, MaterialShape.Gem, MaterialShape.Ghostish, MaterialShape.Bun, MaterialShape.Heart, MaterialShape.Oval]
@@ -52,7 +53,6 @@ Rectangle {
         return s !== "";
     }).join(" \u00B7 ") : ""
     readonly property string coverUrl: track && track.thumb ? "file://" + track.thumb : ""
-
     readonly property color ringColor: {
         if (root.coverUrl === "")
             return "transparent";
@@ -63,14 +63,17 @@ Rectangle {
     function mix(a, b) {
         return a + (b - a) * p;
     }
+
     function expand() {
         dragging = false;
         p = 1;
     }
+
     function collapse() {
         dragging = false;
         p = 0;
     }
+
     function skip(dir) {
         if (dir > 0 && Controller.player.position > 3000)
             Controller.prev();
@@ -146,26 +149,28 @@ Rectangle {
         border.color: root.ringColor
     }
 
-    MarqueeText {
+    Text {
         id: title
         width: root.mix(root.pw - 252, root.pw - 64)
         x: root.mix(68, 32)
         y: root.mix(16, root.artTop + root.artSize + 18)
-        centering: root.p
-        running: root.p < 0.02 || root.p > 0.98
+        horizontalAlignment: root.p > 0.5 ? Text.AlignHCenter : Text.AlignLeft
+        elide: Text.ElideRight
+        maximumLineCount: 1
         color: Theme.onSurfaceColor
         font.pixelSize: Math.round(root.mix(15, 24))
         font.weight: Font.Medium
         text: root.titleText
     }
 
-    MarqueeText {
+    Text {
         id: sub
         width: title.width
         x: title.x
         y: title.y + root.mix(20, 34)
-        centering: root.p
-        running: title.running
+        horizontalAlignment: title.horizontalAlignment
+        elide: Text.ElideRight
+        maximumLineCount: 1
         color: Theme.onSurfaceVariantColor
         font.pixelSize: Math.round(root.mix(13, 16))
         text: root.subText
@@ -189,6 +194,7 @@ Rectangle {
             iconSource: "../icons/prev.svg"
             onClicked: Controller.prev()
         }
+
         MaterialIconButton {
             type: MaterialIconButton.Filled
             sizeStyle: MaterialIconButton.Small
@@ -197,6 +203,7 @@ Rectangle {
             iconSource: Controller.playing ? "../icons/pause.svg" : "../icons/play.svg"
             onClicked: Controller.toggle()
         }
+
         MaterialIconButton {
             type: MaterialIconButton.Tonal
             sizeStyle: MaterialIconButton.Small
@@ -234,6 +241,7 @@ Rectangle {
         opacity: Math.max(0, root.p * 2 - 1)
         visible: opacity > 0
         enabled: root.p > 0.6
+
         sourceComponent: NowPlayingControls {
             pw: root.pw
             trackUri: root.track ? root.track.uri : ""

@@ -82,5 +82,6 @@
             android:name="com.safalski.evernight.PlaybackService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="false" />
+<profileable android:shell="true" />
     </application>
 </manifest>

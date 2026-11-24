@@ -1,5 +1,4 @@
 #pragma once
-#include <QAudioBufferOutput>
 #include <QAudioOutput>
 #include <QFile>
 #include <QMediaMetaData>
@@ -30,7 +29,6 @@ public:
   Q_INVOKABLE void pause() { m_player.pause(); }
   Q_INVOKABLE void stop() { m_player.stop(); }
 
-  void attach(QAudioBufferOutput *o) { m_player.setAudioBufferOutput(o); }
   std::unique_ptr<QFile> openDevice(const QUrl &url);
 
   QMediaMetaData metaData() const { return m_player.metaData(); }
@@ -57,4 +55,5 @@ private:
   QAudioOutput m_audio;
   std::unique_ptr<QFile> m_file;
   QString m_error;
+  qint64 m_lastPos = 0;
 };

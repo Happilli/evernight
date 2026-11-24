@@ -23,6 +23,7 @@ Item {
                 return l[i];
         return null;
     }
+
     Component.onCompleted: {
         if (detailList)
             shown = detailList;
@@ -107,6 +108,7 @@ Item {
         contentHeight: dcol.height + 40
         flickableDirection: Flickable.VerticalFlick
         boundsBehavior: Flickable.StopAtBounds
+
         Component.onCompleted: {
             contentY = -topMargin;
             root.ready = true;
@@ -121,7 +123,6 @@ Item {
                 id: actions
                 width: parent.width
                 spacing: 12
-
                 readonly property real btnW: (width - spacing) / 2
 
                 MaterialButton {
@@ -148,6 +149,7 @@ Item {
                     onClicked: root.playAll(true)
                 }
             }
+
             MaterialList {
                 width: parent.width
                 visible: root.detailRows.uris.length > 0
@@ -160,8 +162,6 @@ Item {
                 avatarTextColor: Theme.onSurfaceColor
                 dividerColor: Theme.outlineVariant
                 selectionMode: MaterialList.Single
-                equalizerIndex: root.shownCurrent
-                equalizerLevels: Controller.spectrum.levels
                 model: root.detailRows.model
                 checkedIndices: root.shownCurrent >= 0 ? [root.shownCurrent] : []
                 onClicked: (index, item) => Controller.playQueue(root.detailRows.uris, index)

@@ -96,6 +96,7 @@ public:
 protected:
   QSGNode *updatePaintNode(QSGNode *old, UpdatePaintNodeData *) override;
   void itemChange(ItemChange change, const ItemChangeData &data) override;
+  virtual bool wantsFrame() { return true; }
 
   virtual void build(Kit::Mesh &) {}
   virtual void propertyAssigned() {}

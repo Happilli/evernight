@@ -57,12 +57,6 @@ class MaterialList : public SgMaterialItem {
                  setAvatarTextColor NOTIFY avatarTextColorChanged)
   Q_PROPERTY(QColor dividerColor READ dividerColor WRITE setDividerColor NOTIFY
                  dividerColorChanged)
-  Q_PROPERTY(int equalizerIndex READ equalizerIndex WRITE setEqualizerIndex
-                 NOTIFY equalizerIndexChanged)
-  Q_PROPERTY(QList<qreal> equalizerLevels READ equalizerLevels WRITE
-                 setEqualizerLevels NOTIFY equalizerLevelsChanged)
-  Q_PROPERTY(
-      QRectF equalizerRect READ equalizerRect NOTIFY equalizerRectChanged)
 
 public:
   enum Variant { Standard, Segmented };
@@ -74,7 +68,6 @@ public:
 
   QVariantList model() const { return m_raw; }
   int count() const { return m_items.size(); }
-  QRectF equalizerRect() const { return m_eqRect; }
   Variant variant() const { return m_variant; }
   SelectionMode selectionMode() const { return m_mode; }
   QList<int> checkedIndices() const { return m_checked; }
@@ -95,8 +88,6 @@ public:
   QColor avatarColor() const { return m_avatarColor; }
   QColor avatarTextColor() const { return m_avatarTextColor; }
   QColor dividerColor() const { return m_dividerColor; }
-  int equalizerIndex() const { return m_eqIndex; }
-  QList<qreal> equalizerLevels() const { return m_eqLevels; }
 
   void setModel(const QVariantList &v);
   void setVariant(Variant v);
@@ -117,8 +108,6 @@ public:
   void setAvatarColor(const QColor &v);
   void setAvatarTextColor(const QColor &v);
   void setDividerColor(const QColor &v);
-  void setEqualizerIndex(int v);
-  void setEqualizerLevels(const QList<qreal> &v);
 
   Q_INVOKABLE bool isChecked(int i) const { return m_checked.contains(i); }
   Q_INVOKABLE void setChecked(int i, bool on);
@@ -127,7 +116,6 @@ public:
   Q_INVOKABLE void setDetails(int index, const QVariantList &rows);
 
 signals:
-  void equalizerRectChanged();
   void trailingClicked(int index, const QVariant &item);
   void expandRequested(int index, const QVariant &item);
   void longPressed(int index, const QVariant &item);
@@ -149,8 +137,6 @@ signals:
   void avatarColorChanged();
   void avatarTextColorChanged();
   void dividerColorChanged();
-  void equalizerIndexChanged();
-  void equalizerLevelsChanged();
   void clicked(int index, const QVariant &item);
 
 protected:
@@ -167,8 +153,6 @@ private slots:
   void onFlick();
 
 private:
-  void updateEqRect();
-  QRectF m_eqRect;
   struct Detail {
     QString label;
     QString value;
@@ -243,6 +227,8 @@ private:
   bool m_extBusy = false;
   QFont m_font;
   QFont m_iconFont;
+  int m_bFirst = -1;
+  int m_bLast = -2;
   QTimer m_holdTimer;
   bool m_held = false;
   int m_fontGen = 0;
@@ -255,8 +241,6 @@ private:
   QColor m_avatarColor = QColor("#EADDFF");
   QColor m_avatarTextColor = QColor("#21005D");
   QColor m_dividerColor = QColor("#CAC4D0");
-  int m_eqIndex = -1;
-  QList<qreal> m_eqLevels;
   int m_pressIndex = -1;
   QElapsedTimer m_pressClock;
   int m_flashIndex = -1;

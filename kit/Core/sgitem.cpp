@@ -449,7 +449,8 @@ SgMaterialItem::SgMaterialItem(QQuickItem *parent, qreal stiffness,
     if (dt <= 0.0)
       return;
     const bool running = advance(dt);
-    update();
+    if (wantsFrame())
+      update();
     if (!running)
       m_driver->stop();
   };
