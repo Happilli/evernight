@@ -3,7 +3,7 @@
 #include <QQmlApplicationEngine>
 
 int main(int argc, char *argv[]) {
-  qputenv("QSG_VISUALIZE", "changes");
+  qputenv("QT_MEDIA_BACKEND", "android");
   QGuiApplication app(argc, argv);
   app.setOrganizationName("safalski");
   app.setApplicationName("Evernight");

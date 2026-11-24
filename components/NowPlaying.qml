@@ -145,7 +145,7 @@ Rectangle {
         glyph: root.coverUrl !== "" ? "" : "\u266A"
         glyphColor: Theme.onSurfaceColor
         glyphSize: root.mix(20, 96)
-        border.width: root.coverUrl !== "" ? root.mix(2, 5) : 0
+        border.width: root.coverUrl !== "" ? root.mix(2, 3) : 0
         border.color: root.ringColor
     }
 

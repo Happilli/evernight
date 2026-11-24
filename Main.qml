@@ -11,25 +11,6 @@ Window {
     title: "Evernight"
     color: Theme.background
 
-    property int frames: 0
-
-    Connections {
-        target: root
-        function onFrameSwapped() {
-            frames++;
-        }
-    }
-
-    Timer {
-        interval: 1000
-        running: true
-        repeat: true
-        onTriggered: {
-            console.log("fps", frames);
-            frames = 0;
-        }
-    }
-
     property string detailId: ""
     readonly property real playerInset: np.visible ? np.miniHeight + np.miniBottom + 12 : 0
 
