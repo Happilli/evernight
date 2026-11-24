@@ -73,12 +73,6 @@ Player::Player(QObject *parent) : QObject(parent) {
                  s == QMediaPlayer::BufferedMedia))
               m_player.play();
           });
-  connect(
-      &m_player, &QMediaPlayer::mediaStatusChanged, this,
-      [](QMediaPlayer::MediaStatus s) { qWarning("ev-t status %d", int(s)); });
-  connect(
-      &m_player, &QMediaPlayer::playbackStateChanged, this,
-      [](QMediaPlayer::PlaybackState s) { qWarning("ev-t state %d", int(s)); });
 }
 
 QString Player::errorString() const {
