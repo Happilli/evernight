@@ -67,6 +67,7 @@ Window {
     ListView {
         id: view
         anchors.top: tabs.bottom
+        visible: root.groupKind === "" && root.detailId === ""
         anchors.bottom: parent.bottom
         anchors.bottomMargin: root.playerInset
         anchors.left: parent.left
@@ -85,6 +86,8 @@ Window {
         model: ObjectModel {
             HomePage {
                 id: homePage
+                onOpenPlaylist: playlistId => root.detailId = playlistId
+                onSongLongPressed: (uri, title, artist, playlistId) => songSheet.openFor(uri, title, artist, playlistId)
             }
             PlaylistsPage {
                 id: playlistsPage

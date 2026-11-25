@@ -1,4 +1,6 @@
+pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Effects
 import Evernight.Extraa
 import Evernight
 
@@ -8,8 +10,6 @@ Item {
     property string kind: ""
     property string groupName: ""
     readonly property real statusInset: 40
-    property bool ready: false
-    readonly property real scrollOffset: ready ? Math.max(0, dflick.contentY + dflick.topMargin - statusInset) : 0
 
     signal closeRequested
     signal songLongPressed(string uri, string title, string artist, string playlistId)
@@ -27,10 +27,18 @@ Item {
             closeRequested();
     }
 
+    function toUrl(s) {
+        if (!s)
+            return "";
+        const v = String(s);
+        return v.indexOf("://") >= 0 || v.indexOf("qrc:") === 0 ? v : "file://" + v;
+    }
+
     readonly property var detailRows: {
         const out = {
             model: [],
-            uris: []
+            uris: [],
+            thumb: ""
         };
         const g = root.group;
         if (!g)
@@ -41,6 +49,8 @@ Item {
             if (!tr)
                 continue;
             out.uris.push(tr.uri);
+            if (out.thumb === "" && tr.thumb)
+                out.thumb = root.toUrl(tr.thumb);
             out.model.push({
                 headline: tr.title,
                 supporting: root.kind === "album" ? tr.artist : tr.album,
@@ -84,29 +94,115 @@ Item {
     Flickable {
         id: dflick
         anchors.fill: parent
-        anchors.leftMargin: 16
-        anchors.rightMargin: 16
-        topMargin: root.statusInset + bar.expandedHeight
+        anchors.topMargin: root.statusInset + bar.collapsedHeight
         clip: true
         contentWidth: width
-        contentHeight: dcol.height + 40
+        contentHeight: dcol.height + Theme.spaceXl
         flickableDirection: Flickable.VerticalFlick
         boundsBehavior: Flickable.StopAtBounds
-
-        Component.onCompleted: {
-            contentY = -topMargin;
-            root.ready = true;
-        }
 
         Column {
             id: dcol
             width: dflick.width
-            spacing: 12
+            spacing: Theme.spaceLg
+
+            Item {
+                id: hero
+                width: parent.width
+                height: width - Theme.pageMargin * 2 + Theme.spaceMd
+
+                Item {
+                    id: heroMask
+                    x: Theme.pageMargin
+                    y: Theme.spaceMd
+                    width: hero.width - Theme.pageMargin * 2
+                    height: width
+                    layer.enabled: true
+                    visible: false
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: Theme.radiusLg + Theme.spaceSm
+                        color: Theme.onSurfaceColor
+                    }
+                }
+
+                Item {
+                    x: heroMask.x
+                    y: heroMask.y
+                    width: heroMask.width
+                    height: heroMask.height
+                    layer.enabled: true
+                    layer.effect: MultiEffect {
+                        maskEnabled: true
+                        maskSource: heroMask
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: Theme.secondaryContainer
+                    }
+                    Text {
+                        anchors.centerIn: parent
+                        text: "\u266B"
+                        color: Theme.onSecondaryContainerColor
+                        font.pixelSize: parent.width * 0.3
+                        visible: art.status !== Image.Ready
+                    }
+                    Image {
+                        id: art
+                        anchors.fill: parent
+                        source: root.detailRows.thumb
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        sourceSize.width: 1080
+                        sourceSize.height: 1080
+                    }
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        height: parent.height * 0.45
+                        gradient: Gradient {
+                            GradientStop {
+                                position: 0
+                                color: Qt.alpha(Theme.background, 0)
+                            }
+                            GradientStop {
+                                position: 1
+                                color: Qt.alpha(Theme.background, 0.9)
+                            }
+                        }
+                    }
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.margins: Theme.spaceLg
+                        spacing: 2
+                        Text {
+                            width: parent.width
+                            text: root.group ? root.group.name : ""
+                            elide: Text.ElideRight
+                            color: Theme.onSurfaceColor
+                            font.pixelSize: Theme.fsHeadline
+                            font.weight: Font.DemiBold
+                        }
+                        Text {
+                            width: parent.width
+                            text: root.detailRows.uris.length + (root.detailRows.uris.length === 1 ? " song" : " songs")
+                            color: Theme.onSurfaceVariantColor
+                            font.pixelSize: Theme.fsBody
+                        }
+                    }
+                }
+            }
 
             Row {
                 id: actions
-                width: parent.width
-                spacing: 12
+                x: Theme.pageMargin
+                width: parent.width - Theme.pageMargin * 2
+                spacing: Theme.spaceMd
                 readonly property real btnW: (width - spacing) / 2
 
                 MaterialButton {
@@ -120,7 +216,6 @@ Item {
                     enabled: root.detailRows.uris.length > 0
                     onClicked: root.playAll(false)
                 }
-
                 MaterialButton {
                     width: actions.btnW
                     label: "Shuffle"
@@ -135,7 +230,8 @@ Item {
             }
 
             MaterialList {
-                width: parent.width
+                x: Theme.pageMargin
+                width: parent.width - Theme.pageMargin * 2
                 visible: root.detailRows.uris.length > 0
                 variant: MaterialList.Standard
                 selectedColor: Theme.secondaryContainer
@@ -159,7 +255,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         height: root.statusInset
-        color: root.scrollOffset > 1 ? Theme.surfaceContainer : Theme.background
+        color: Theme.background
     }
 
     MaterialAppBar {
@@ -168,17 +264,11 @@ Item {
         anchors.topMargin: root.statusInset
         anchors.left: parent.left
         anchors.right: parent.right
-        type: MaterialAppBar.Medium
+        type: MaterialAppBar.Small
         navigation: MaterialAppBar.Back
-        title: root.group ? root.group.name : ""
-        subtitle: root.detailRows.uris.length + (root.detailRows.uris.length === 1 ? " song" : " songs")
         color: Theme.background
-        scrolledColor: Theme.surfaceContainer
-        titleColor: Theme.onSurfaceColor
-        subtitleColor: Theme.onSurfaceVariantColor
         iconColor: Theme.onSurfaceColor
-        collapse: bar.collapseRange > 0 ? Math.min(1, root.scrollOffset / bar.collapseRange) : 0
-        scrolled: root.scrollOffset > 1
+        titleColor: Theme.onSurfaceColor
         onNavigationClicked: root.closeRequested()
     }
 }
