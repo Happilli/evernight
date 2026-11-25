@@ -1,6 +1,7 @@
 #include "./Controller.h"
 #include "./Store.h"
 #include <QDate>
+#include <QDateTime>
 #include <QGuiApplication>
 #include <QHash>
 #include <QJsonArray>
@@ -125,7 +126,6 @@ QVariantList describe(const QMediaMetaData &m, qint64 durationMs) {
 }
 
 #ifdef Q_OS_ANDROID
-
 constexpr int kSdkNotifications = 33;
 constexpr int kThumbSize = 512;
 constexpr qint64 kSeekJumpMs = 1500;
@@ -362,7 +362,6 @@ QList<Row> queryMusicFolder() {
   env.checkAndClearExceptions();
   return rows;
 }
-
 #endif
 
 } // namespace
@@ -417,6 +416,8 @@ Controller::Controller(QObject *parent) : QObject(parent) {
           });
   connect(this, &Controller::tracksChanged, this,
           [this] { m_normDirty = true; });
+  m_sleepTimer.setInterval(1000);
+  connect(&m_sleepTimer, &QTimer::timeout, this, &Controller::onSleepTick);
   m_autoNext = QSettings().value("autoNext", true).toBool();
   m_shuffle = QSettings().value("shuffle", false).toBool();
   m_repeatMode = qBound(0, QSettings().value("repeatMode", 0).toInt(), 2);
@@ -605,6 +606,35 @@ void Controller::setAutoNext(bool value) {
     return;
   m_autoNext = value;
   emit autoNextChanged();
+}
+
+int Controller::sleepRemaining() const {
+  if (!m_sleepEnd)
+    return 0;
+  const qint64 left = m_sleepEnd - QDateTime::currentMSecsSinceEpoch();
+  return left > 0 ? int((left + 999) / 1000) : 0;
+}
+
+void Controller::setSleepTimer(int seconds) {
+  if (seconds <= 0) {
+    m_sleepTimer.stop();
+    m_sleepEnd = 0;
+  } else {
+    m_sleepEnd = QDateTime::currentMSecsSinceEpoch() + qint64(seconds) * 1000;
+    m_sleepTimer.start();
+  }
+  emit sleepChanged();
+}
+
+void Controller::onSleepTick() {
+  if (sleepRemaining() > 0) {
+    emit sleepChanged();
+    return;
+  }
+  m_sleepTimer.stop();
+  m_sleepEnd = 0;
+  m_player.pause();
+  emit sleepChanged();
 }
 
 int Controller::queueSize() const {

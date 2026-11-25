@@ -1,10 +1,12 @@
 #pragma once
+
 #include "DiscordPresence.h"
 #include "MediaInfo.h"
 #include "Player.h"
 #include <QList>
 #include <QObject>
 #include <QStringList>
+#include <QTimer>
 #include <QUrl>
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
@@ -26,6 +28,7 @@ class Controller : public QObject {
       bool autoNext READ autoNext WRITE setAutoNext NOTIFY autoNextChanged)
   Q_PROPERTY(QVariantList recent READ recent NOTIFY recentChanged)
   Q_PROPERTY(QVariantList queue READ queue NOTIFY queueChanged)
+  Q_PROPERTY(int sleepRemaining READ sleepRemaining NOTIFY sleepChanged)
 
 public:
   explicit Controller(QObject *parent = nullptr);
@@ -43,6 +46,7 @@ public:
   bool shuffle() const { return m_shuffle; }
   int repeatMode() const { return m_repeatMode; }
   bool autoNext() const { return m_autoNext; }
+  int sleepRemaining() const;
   void setShuffle(bool value);
   void setRepeatMode(int value);
   void setAutoNext(bool value);
@@ -57,6 +61,7 @@ public:
   Q_INVOKABLE void skipPrev();
   Q_INVOKABLE QVariantList search(const QString &query);
   Q_INVOKABLE void inspect(const QString &uri);
+  Q_INVOKABLE void setSleepTimer(int seconds);
 
 signals:
   void queueChanged();
@@ -68,6 +73,7 @@ signals:
   void shuffleChanged();
   void repeatModeChanged();
   void autoNextChanged();
+  void sleepChanged();
 
 private:
   struct Norm {
@@ -95,6 +101,7 @@ private:
   int queueAt(int pos) const;
   int queuePos() const;
   void onEnded();
+  void onSleepTick();
 
   Player m_player;
   MediaInfo m_info;
@@ -111,4 +118,6 @@ private:
   bool m_scanning = false;
   qint64 m_pendingSeek = -1;
   qint64 m_savedPos = 0;
+  QTimer m_sleepTimer;
+  qint64 m_sleepEnd = 0;
 };
