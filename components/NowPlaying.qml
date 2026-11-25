@@ -103,7 +103,7 @@ Rectangle {
         x: 0
         y: 0
         width: parent.width
-        height: root.controlsTop + 60
+        height: parent.width * 1.55
         source: root.coverUrl
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
