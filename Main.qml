@@ -10,12 +10,10 @@ Window {
     visible: true
     title: "Evernight"
     color: Theme.background
-
     property string detailId: ""
     property string groupKind: ""
     property string groupName: ""
-    readonly property real playerInset: np.visible ? np.miniHeight + np.miniBottom + 12 : 0
-
+    readonly property real playerInset: np.visible ? np.miniHeight + np.miniBottom + Theme.spaceMd : 0
     function handleBack() {
         if (queueSheet.open) {
             queueSheet.open = false;
@@ -44,19 +42,16 @@ Window {
         }
         return homePage.handleBack() || playlistsPage.handleBack() || browsePage.handleBack();
     }
-
     onClosing: close => {
         if (handleBack())
             close.accepted = false;
     }
-
     Binding {
         target: view
         property: "interactive"
         value: false
         when: np.p > 0.02
     }
-
     AppTabs {
         id: tabs
         anchors.top: parent.top
@@ -69,7 +64,6 @@ Window {
                 view.currentIndex = currentIndex;
         }
     }
-
     ListView {
         id: view
         anchors.top: tabs.bottom
@@ -88,27 +82,23 @@ Window {
         flickDeceleration: 1500
         maximumFlickVelocity: 2500
         cacheBuffer: width * 3
-
         model: ObjectModel {
             HomePage {
                 id: homePage
-                onSongLongPressed: (uri, title, artist, playlistId) => songSheet.openFor(uri, title, artist, playlistId)
             }
-
             PlaylistsPage {
                 id: playlistsPage
                 onOpenRequested: playlistId => root.detailId = playlistId
                 onCreateRequested: playlistDialog.openCreate()
             }
-
             BrowsePage {
                 id: browsePage
                 onOpenRequested: (kind, name) => {
                     root.groupKind = kind;
                     root.groupName = name;
                 }
+                onSongLongPressed: (uri, title, artist, playlistId) => songSheet.openFor(uri, title, artist, playlistId)
             }
-
             Loader {
                 width: ListView.view ? ListView.view.width : 0
                 height: ListView.view ? ListView.view.height : 0
@@ -116,13 +106,11 @@ Window {
                 sourceComponent: SettingsPage {}
             }
         }
-
         onCurrentIndexChanged: {
             if (tabs.currentIndex !== currentIndex)
                 tabs.currentIndex = currentIndex;
         }
     }
-
     Loader {
         id: detailLoader
         readonly property PlaylistDetail page: item as PlaylistDetail
@@ -135,35 +123,28 @@ Window {
             }
         }
     }
-
     Binding {
         target: detailLoader.item
         property: "playlistId"
         value: root.detailId
         when: detailLoader.item !== null
     }
-
     Connections {
         target: detailLoader.item
         ignoreUnknownSignals: true
-
         function onCloseRequested() {
             root.detailId = "";
         }
-
         function onRenameRequested(id, name) {
             playlistDialog.openRename(id, name);
         }
-
         function onDeleteRequested(id, name) {
             playlistDialog.openDelete(id, name);
         }
-
         function onSongLongPressed(uri, title, artist, playlistId) {
             songSheet.openFor(uri, title, artist, playlistId);
         }
     }
-
     Loader {
         id: groupLoader
         anchors.fill: parent
@@ -176,21 +157,17 @@ Window {
             }
         }
     }
-
     Connections {
         target: groupLoader.item
         ignoreUnknownSignals: true
-
         function onCloseRequested() {
             root.groupKind = "";
             root.groupName = "";
         }
-
         function onSongLongPressed(uri, title, artist, playlistId) {
             songSheet.openFor(uri, title, artist, playlistId);
         }
     }
-
     NowPlaying {
         id: np
         blocked: queueSheet.open
@@ -198,26 +175,21 @@ Window {
             queueSheet.open = true;
         }
     }
-
     Item {
         id: overlayLayer
         anchors.fill: parent
-
         SongSheet {
             id: songSheet
             anchors.fill: parent
         }
-
         QueueSheet {
             id: queueSheet
             anchors.fill: parent
         }
-
         PlaylistDialog {
             id: playlistDialog
             anchors.fill: parent
         }
-
         MaterialSnackbar {
             id: snack
             anchors.fill: parent
@@ -225,7 +197,7 @@ Window {
             property string listId: ""
             property string songUri: ""
             color: Theme.inverseSurface
-            bottomMargin: 24
+            bottomMargin: Theme.spaceXl
             textColor: Theme.inverseOnSurface
             actionColor: Theme.inversePrimary
             onActionClicked: {
@@ -235,7 +207,6 @@ Window {
                     Playlists.add(listId, songUri);
             }
         }
-
         Connections {
             target: Snack
             function onRequested(message, kind, listId, songUri) {

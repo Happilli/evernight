@@ -9,7 +9,6 @@ QtObject {
     }
     readonly property bool dark: mode === 0 ? Application.styleHints.colorScheme !== Qt.ColorScheme.Light : mode === 2
     readonly property var t: dark ? ThemeLoader.dark : ThemeLoader.light
-
     readonly property color background: t.background
     readonly property color onBackgroundColor: t.onBackgroundColor
     readonly property color surface: t.surface
@@ -59,4 +58,27 @@ QtObject {
     readonly property color onErrorContainerColor: t.onErrorContainerColor
     readonly property color scrim: t.scrim
     readonly property color shadow: t.shadow
+
+    readonly property int spaceXs: 4
+    readonly property int spaceSm: 8
+    readonly property int spaceMd: 12
+    readonly property int spaceLg: 16
+    readonly property int spaceXl: 24
+
+    readonly property int radiusSm: 12
+    readonly property int radiusMd: 16
+    readonly property int radiusLg: 24
+
+    readonly property int pageMargin: spaceLg
+
+    readonly property int fsLabel: 12
+    readonly property int fsBody: 14
+    readonly property int fsBodyLarge: 16
+    readonly property int fsTitle: 20
+    readonly property int fsHeadline: 24
+
+    readonly property int durFast: 120
+    readonly property int durBase: 240
+    readonly property int durSlow: 400
+    readonly property int easeOut: Easing.OutQuart
 }

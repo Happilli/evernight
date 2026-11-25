@@ -28,6 +28,8 @@ class WavyProgress : public SgItem {
   Q_PROPERTY(qreal strokeWidth READ strokeWidth WRITE setStrokeWidth NOTIFY
                  strokeWidthChanged)
   Q_PROPERTY(qreal gap READ gap WRITE setGap NOTIFY gapChanged)
+  Q_PROPERTY(bool showStopDot READ showStopDot WRITE setShowStopDot NOTIFY
+                 showStopDotChanged)
 
 public:
   enum Style { Linear, Circular };
@@ -46,6 +48,7 @@ public:
   qreal waveSpeed() const { return m_waveSpeed; }
   qreal strokeWidth() const { return m_stroke; }
   qreal gap() const { return m_gap; }
+  bool showStopDot() const { return m_stopDot; }
 
   void setStyle(Style v);
   void setProgress(qreal v);
@@ -58,9 +61,11 @@ public:
   void setWaveSpeed(qreal v);
   void setStrokeWidth(qreal v);
   void setGap(qreal v);
+  void setShowStopDot(bool v);
 
 signals:
   void styleChanged();
+  void showStopDotChanged();
   void progressChanged();
   void indeterminateChanged();
   void animatedChanged();
@@ -100,6 +105,7 @@ private:
   qreal m_waveSpeed = 0.8;
   qreal m_stroke = 4.0;
   qreal m_gap = 4.0;
+  bool m_stopDot = false;
   qreal m_phase = 0.0;
   qreal m_time = 0.0;
   QElapsedTimer m_clock;

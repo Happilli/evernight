@@ -21,7 +21,6 @@ Column {
     }
     signal queueRequested
     signal skipRequested(int dir)
-
     function refreshLiked() {
         liked = trackUri !== "" && Playlists.isLiked(trackUri);
     }
@@ -31,20 +30,16 @@ Column {
         s = s % 60;
         return m + ":" + (s < 10 ? "0" : "") + s;
     }
-
     onTrackUriChanged: refreshLiked()
     Component.onCompleted: refreshLiked()
-
     Connections {
         target: Playlists
         function onChanged() {
             root.refreshLiked();
         }
     }
-
     width: pw - 2 * sideMargin
     spacing: 12
-
     Item {
         id: bar
         width: parent.width
@@ -53,7 +48,6 @@ Column {
         property bool holding: false
         readonly property real target: Math.max(0, Math.min(1, (seek.pressed || holding) ? seekFrac : (Controller.player.duration > 0 ? Controller.player.position / Controller.player.duration : 0)))
         property real shown: target
-
         Behavior on shown {
             enabled: seek.pressed || bar.holding
             NumberAnimation {
@@ -61,13 +55,11 @@ Column {
                 easing.type: Easing.Linear
             }
         }
-
         Timer {
             id: hold
             interval: 600
             onTriggered: bar.holding = false
         }
-
         Text {
             id: posText
             anchors.left: parent.left
@@ -75,10 +67,9 @@ Column {
             width: 40
             horizontalAlignment: Text.AlignLeft
             color: root.fgDim
-            font.pixelSize: 13
+            font.pixelSize: Theme.fsLabel
             text: root.fmt((seek.pressed || bar.holding) ? bar.seekFrac * Controller.player.duration : Controller.player.position)
         }
-
         Text {
             id: durText
             anchors.right: parent.right
@@ -86,10 +77,9 @@ Column {
             width: 40
             horizontalAlignment: Text.AlignRight
             color: root.fgDim
-            font.pixelSize: 13
+            font.pixelSize: Theme.fsLabel
             text: root.fmt(Controller.player.duration)
         }
-
         Item {
             id: trackArea
             anchors.left: posText.right
@@ -98,7 +88,6 @@ Column {
             anchors.rightMargin: 6
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-
             WavyProgress {
                 anchors.verticalCenter: parent.verticalCenter
                 width: parent.width
@@ -108,13 +97,13 @@ Column {
                 progress: bar.shown
                 animated: Controller.playing && !seek.pressed
                 color: root.active
+                showStopDot: true
                 trackColor: Qt.alpha(root.fg, 0.25)
                 wavelength: 28
                 strokeWidth: 3
                 amplitude: 3
                 waveSpeed: 0.8
             }
-
             MouseArea {
                 id: seek
                 anchors.fill: parent
@@ -135,7 +124,6 @@ Column {
             }
         }
     }
-
     Column {
         width: parent.width
         spacing: 2
@@ -144,7 +132,7 @@ Column {
             elide: Text.ElideRight
             maximumLineCount: 1
             color: root.fg
-            font.pixelSize: 24
+            font.pixelSize: Theme.fsHeadline
             font.weight: Font.Medium
             text: root.titleText
         }
@@ -153,15 +141,13 @@ Column {
             elide: Text.ElideRight
             maximumLineCount: 1
             color: root.fgDim
-            font.pixelSize: 16
+            font.pixelSize: Theme.fsBodyLarge
             text: root.subText
         }
     }
-
     Item {
         width: parent.width
         height: Math.max(leftRow.height, rightRow.height)
-
         Row {
             id: leftRow
             anchors.left: parent.left
@@ -202,7 +188,6 @@ Column {
                 onClicked: root.skipRequested(-1)
             }
         }
-
         Row {
             id: rightRow
             anchors.right: parent.right

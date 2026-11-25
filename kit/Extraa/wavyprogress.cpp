@@ -140,6 +140,10 @@ void WavyProgress::setGap(qreal v) {
   assign(m_gap, std::max(0.0, v), &WavyProgress::gapChanged);
 }
 
+void WavyProgress::setShowStopDot(bool v) {
+  assign(m_stopDot, v, &WavyProgress::showStopDotChanged);
+}
+
 void WavyProgress::segment(qreal &a, qreal &b) const {
   if (!m_indeterminate) {
     a = 0.0;
@@ -170,10 +174,15 @@ void WavyProgress::buildLinear(Kit::Mesh &m, qreal a, qreal b) {
       std::min(m_ampNow, std::max(0.0, (height() - m_stroke) / 2.0));
   const qreal xa = x0 + len * a, xb = x0 + len * b;
   const qreal g = m_gap + m_stroke;
+  const qreal dotR = std::max(m_stroke / 2.0, 2.0);
+  const bool dot = m_stopDot && !m_indeterminate && xb + g + dotR < x1 - dotR;
+  if (dot)
+    m.fillCircle(QPointF(x1 - dotR, cy), dotR, m_color);
   if (xa - g > x0)
     m.line(QPointF(x0, cy), QPointF(xa - g, cy), m_stroke, m_trackColor);
-  if (xb + g < x1)
-    m.line(QPointF(xb + g, cy), QPointF(x1, cy), m_stroke, m_trackColor);
+  const qreal trackEnd = dot ? x1 - 2.0 * dotR - m_gap : x1;
+  if (xb + g < trackEnd)
+    m.line(QPointF(xb + g, cy), QPointF(trackEnd, cy), m_stroke, m_trackColor);
   if (xb - xa < 0.01) {
     if (b > 0.0 || m_indeterminate)
       m.fillCircle(QPointF(xa, cy), m_stroke / 2.0, m_color);
@@ -211,12 +220,20 @@ void WavyProgress::buildCircular(Kit::Mesh &m, qreal a, qreal b) {
   const qreal ga = (m_gap + m_stroke) / r;
   const qreal ta = kTwoPi * a, tb = kTwoPi * b;
   const qreal t0 = tb + ga, t1 = kTwoPi + ta - ga;
-  if (t1 > t0) {
-    const int steps = std::max(2, int(std::ceil((t1 - t0) * r / kTrackStepPx)));
+  const qreal dotR = std::max(m_stroke / 2.0, 2.0);
+  const qreal dotTh = kTwoPi + ta - (m_gap + m_stroke / 2.0 + dotR) / r;
+  const qreal tEnd = dotTh - (dotR + m_gap) / r;
+  const bool dot = m_stopDot && !m_indeterminate && tEnd > t0;
+  if (dot)
+    m.fillCircle(pt(dotTh, r), dotR, m_color);
+  const qreal trackEnd = dot ? tEnd : t1;
+  if (trackEnd > t0) {
+    const int steps =
+        std::max(2, int(std::ceil((trackEnd - t0) * r / kTrackStepPx)));
     QList<QPointF> track;
     track.reserve(steps + 1);
     for (int i = 0; i <= steps; ++i)
-      track.append(pt(t0 + (t1 - t0) * i / steps, r));
+      track.append(pt(t0 + (trackEnd - t0) * i / steps, r));
     m.polyline(track, m_stroke, m_trackColor);
   }
   if (tb - ta < 0.001) {

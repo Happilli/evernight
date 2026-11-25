@@ -12,7 +12,7 @@ Rectangle {
     property bool blocked: false
     signal queueRequested
     readonly property int miniHeight: 76
-    readonly property int miniMargin: 12
+    readonly property int miniMargin: Theme.spaceMd
     readonly property int miniBottom: 16
     readonly property real sideMargin: 20
     readonly property real pw: parent ? parent.width : 0
@@ -32,7 +32,6 @@ Rectangle {
     }).join(" \u00B7 ") : ""
     readonly property string coverUrl: track && track.thumb ? "file://" + track.thumb : ""
     readonly property bool hasCover: coverUrl !== ""
-
     function mix(a, b) {
         return a + (b - a) * p;
     }
@@ -52,31 +51,27 @@ Rectangle {
         else
             Controller.next();
     }
-
     visible: Controller.current >= 0
     clip: true
     x: mix(miniMargin, 0)
     y: mix(ph - miniHeight - miniBottom, 0)
     width: mix(pw - 2 * miniMargin, pw)
     height: mix(miniHeight, ph)
-    radius: mix(24, 0)
+    radius: mix(Theme.radiusLg, 0)
     color: Qt.tint(Theme.surfaceContainer, Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, p))
-
     Behavior on p {
         enabled: !root.dragging
         NumberAnimation {
-            duration: 240
-            easing.type: Easing.OutQuart
+            duration: Theme.durBase
+            easing.type: Theme.easeOut
         }
     }
-
     MouseArea {
         anchors.fill: parent
         enabled: !root.blocked
         onClicked: if (root.p < 0.5)
             root.expand()
     }
-
     DragHandler {
         enabled: !root.blocked
         target: null
@@ -103,7 +98,6 @@ Rectangle {
             root.p = Math.max(0, Math.min(1, root.startP - translation.y / root.dragTravel));
         }
     }
-
     Image {
         id: cover
         x: 0
@@ -118,7 +112,6 @@ Rectangle {
         opacity: root.p
         visible: root.hasCover && opacity > 0
     }
-
     Rectangle {
         width: parent.width
         height: cover.height * 0.55
@@ -136,7 +129,6 @@ Rectangle {
             }
         }
     }
-
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         y: root.controlsTop / 2 - height / 2
@@ -146,7 +138,6 @@ Rectangle {
         opacity: root.p
         visible: !root.hasCover && opacity > 0
     }
-
     Text {
         id: title
         width: root.pw - 184
@@ -155,13 +146,12 @@ Rectangle {
         elide: Text.ElideRight
         maximumLineCount: 1
         color: Theme.onSurfaceColor
-        font.pixelSize: 15
+        font.pixelSize: Theme.fsBodyLarge
         font.weight: Font.Medium
         text: root.titleText
         opacity: Math.max(0, 1 - root.p * 3)
         visible: opacity > 0
     }
-
     Text {
         width: title.width
         x: title.x
@@ -169,12 +159,11 @@ Rectangle {
         elide: Text.ElideRight
         maximumLineCount: 1
         color: Theme.onSurfaceVariantColor
-        font.pixelSize: 13
+        font.pixelSize: Theme.fsBody
         text: root.subText
         opacity: title.opacity
         visible: opacity > 0
     }
-
     Row {
         id: miniControls
         anchors.right: parent.right
@@ -209,7 +198,6 @@ Rectangle {
             onClicked: Controller.next()
         }
     }
-
     Rectangle {
         x: 18
         y: root.miniHeight - 11
@@ -226,7 +214,6 @@ Rectangle {
             width: Controller.player.duration > 0 ? parent.width * Math.min(1, Controller.player.position / Controller.player.duration) : 0
         }
     }
-
     NowPlayingActions {
         x: root.pw - root.sideMargin - width + 8
         y: root.controlsTop - height - 8
@@ -235,7 +222,6 @@ Rectangle {
         visible: opacity > 0
         enabled: root.p > 0.6
     }
-
     Loader {
         id: ctl
         x: root.sideMargin
