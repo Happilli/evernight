@@ -416,7 +416,7 @@ Controller::Controller(QObject *parent) : QObject(parent) {
           });
   connect(this, &Controller::tracksChanged, this,
           [this] { m_normDirty = true; });
-  m_sleepTimer.setInterval(1000);
+  m_sleepTimer.setInterval(250);
   connect(&m_sleepTimer, &QTimer::timeout, this, &Controller::onSleepTick);
   m_autoNext = QSettings().value("autoNext", true).toBool();
   m_shuffle = QSettings().value("shuffle", false).toBool();
@@ -616,25 +616,42 @@ int Controller::sleepRemaining() const {
 }
 
 void Controller::setSleepTimer(int seconds) {
+  if (m_sleepEnd)
+    m_player.setVolume(m_sleepBaseVol);
   if (seconds <= 0) {
     m_sleepTimer.stop();
     m_sleepEnd = 0;
   } else {
+    if (!m_sleepEnd)
+      m_sleepBaseVol = m_player.volume();
     m_sleepEnd = QDateTime::currentMSecsSinceEpoch() + qint64(seconds) * 1000;
+    m_sleepFadeMs = qMin<qint64>(15000, qint64(seconds) * 500);
+    m_sleepLastSec = -1;
     m_sleepTimer.start();
   }
   emit sleepChanged();
 }
 
 void Controller::onSleepTick() {
-  if (sleepRemaining() > 0) {
+  const qint64 left = m_sleepEnd - QDateTime::currentMSecsSinceEpoch();
+  if (left <= 0) {
+    const float base = m_sleepBaseVol;
+    m_sleepTimer.stop();
+    m_sleepEnd = 0;
+    m_player.pause();
+    QTimer::singleShot(800, this, [this, base] { m_player.setVolume(base); });
     emit sleepChanged();
     return;
   }
-  m_sleepTimer.stop();
-  m_sleepEnd = 0;
-  m_player.pause();
-  emit sleepChanged();
+  if (left < m_sleepFadeMs) {
+    const qreal t = qreal(left) / qreal(m_sleepFadeMs);
+    m_player.setVolume(m_sleepBaseVol * float(t * t));
+  }
+  const int sec = sleepRemaining();
+  if (sec != m_sleepLastSec) {
+    m_sleepLastSec = sec;
+    emit sleepChanged();
+  }
 }
 
 int Controller::queueSize() const {

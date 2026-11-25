@@ -83,6 +83,10 @@ private:
   QList<Norm> m_norm;
   bool m_normDirty = true;
 
+  qint64 m_sleepFadeMs = 0;
+  float m_sleepBaseVol = 1.0f;
+  int m_sleepLastSec = -1;
+
   struct Track {
     QUrl url;
     QString title;

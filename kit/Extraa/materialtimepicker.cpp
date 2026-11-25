@@ -469,7 +469,7 @@ void MaterialTimePicker::build(Kit::Mesh &m) {
     if (hm)
       label = QString::number(i == 0 ? 12 : i);
     else
-      label = QString::number(i == 0 ? 60 : i * 5);
+      label = QString::number(i * 5).rightJustified(2, '0');
     centered(i, small, label, i == sel ? m_handleTextColor : m_textColor,
              ringPoint(i * 30.0, kRing));
   }

@@ -38,6 +38,8 @@ public:
   qint64 position() const { return m_player.position(); }
   qint64 duration() const { return m_player.duration(); }
   void setPosition(qint64 position) { m_player.setPosition(position); }
+  float volume() const { return m_audio.volume(); }
+  void setVolume(float v) { m_audio.setVolume(v); }
 
 signals:
   void metaDataChanged();
