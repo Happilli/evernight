@@ -194,7 +194,7 @@ FadePage {
                         text: "\u2605\uFE0E"
                         color: Theme.onSecondaryContainerColor
                         font.pixelSize: parent.width * 0.3
-                        visible: art.status !== Image.Ready
+                        visible: art.status === Image.Error || (hero.thumb === "" && Controller.tracks.length > 0)
                     }
                     Image {
                         id: art
@@ -204,6 +204,12 @@ FadePage {
                         asynchronous: true
                         sourceSize.width: 1080
                         sourceSize.height: 1080
+                        opacity: status === Image.Ready ? 1 : 0
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: 150
+                            }
+                        }
                     }
                     Rectangle {
                         anchors.left: parent.left

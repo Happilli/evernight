@@ -147,14 +147,14 @@ Item {
                         text: "\u266B"
                         color: Theme.onSecondaryContainerColor
                         font.pixelSize: parent.width * 0.3
-                        visible: art.status !== Image.Ready
+                        visible: art.status === Image.Error || root.detailRows.thumb === ""
                     }
                     Image {
                         id: art
                         anchors.fill: parent
                         source: root.detailRows.thumb
                         fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
+                        asynchronous: false
                         sourceSize.width: 1080
                         sourceSize.height: 1080
                     }
