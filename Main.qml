@@ -12,6 +12,8 @@ Window {
     color: Theme.background
 
     property string detailId: ""
+    property string groupKind: ""
+    property string groupName: ""
     readonly property real playerInset: np.visible ? np.miniHeight + np.miniBottom + 12 : 0
 
     function handleBack() {
@@ -31,11 +33,16 @@ Window {
         }
         if (detailLoader.page && detailLoader.page.handleBack())
             return true;
+        if (groupKind !== "") {
+            groupKind = "";
+            groupName = "";
+            return true;
+        }
         if (detailId !== "") {
             detailId = "";
             return true;
         }
-        return homePage.handleBack() || playlistsPage.handleBack();
+        return homePage.handleBack() || playlistsPage.handleBack() || browsePage.handleBack();
     }
 
     onClosing: close => {
@@ -87,15 +94,25 @@ Window {
                 id: homePage
                 onSongLongPressed: (uri, title, artist, playlistId) => songSheet.openFor(uri, title, artist, playlistId)
             }
+
             PlaylistsPage {
                 id: playlistsPage
                 onOpenRequested: playlistId => root.detailId = playlistId
                 onCreateRequested: playlistDialog.openCreate()
             }
+
+            BrowsePage {
+                id: browsePage
+                onOpenRequested: (kind, name) => {
+                    root.groupKind = kind;
+                    root.groupName = name;
+                }
+            }
+
             Loader {
                 width: ListView.view ? ListView.view.width : 0
                 height: ListView.view ? ListView.view.height : 0
-                active: view.currentIndex === 2
+                active: view.currentIndex === 3
                 sourceComponent: SettingsPage {}
             }
         }
@@ -129,15 +146,46 @@ Window {
     Connections {
         target: detailLoader.item
         ignoreUnknownSignals: true
+
         function onCloseRequested() {
             root.detailId = "";
         }
+
         function onRenameRequested(id, name) {
             playlistDialog.openRename(id, name);
         }
+
         function onDeleteRequested(id, name) {
             playlistDialog.openDelete(id, name);
         }
+
+        function onSongLongPressed(uri, title, artist, playlistId) {
+            songSheet.openFor(uri, title, artist, playlistId);
+        }
+    }
+
+    Loader {
+        id: groupLoader
+        anchors.fill: parent
+        anchors.bottomMargin: root.playerInset
+        active: root.groupKind !== ""
+        sourceComponent: Component {
+            GroupDetail {
+                kind: root.groupKind
+                groupName: root.groupName
+            }
+        }
+    }
+
+    Connections {
+        target: groupLoader.item
+        ignoreUnknownSignals: true
+
+        function onCloseRequested() {
+            root.groupKind = "";
+            root.groupName = "";
+        }
+
         function onSongLongPressed(uri, title, artist, playlistId) {
             songSheet.openFor(uri, title, artist, playlistId);
         }

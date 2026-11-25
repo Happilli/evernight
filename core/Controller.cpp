@@ -13,6 +13,7 @@
 #include <QThread>
 #include <QTimer>
 #include <QtGlobal>
+#include <algorithm>
 #include <memory>
 
 #ifdef Q_OS_ANDROID
@@ -319,6 +320,7 @@ struct Row {
   QString title;
   QString artist;
   QString thumb;
+  QString album;
 };
 
 QList<Row> queryMusicFolder() {
@@ -332,7 +334,7 @@ QList<Row> queryMusicFolder() {
       "Landroid/net/Uri;");
   jobjectArray projection =
       stringArray(env, {QStringLiteral("_id"), QStringLiteral("title"),
-                        QStringLiteral("artist")});
+                        QStringLiteral("artist"), QStringLiteral("album")});
   QJniObject cursor = resolver.callObjectMethod(
       "query",
       "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/"
@@ -354,9 +356,15 @@ QList<Row> queryMusicFolder() {
             .toString();
     if (artist == QStringLiteral("<unknown>"))
       artist.clear();
+    QString album =
+        cursor.callObjectMethod("getString", "(I)Ljava/lang/String;", 3)
+            .toString();
+    if (album == QStringLiteral("<unknown>") ||
+        album == QStringLiteral("Music"))
+      album.clear();
     rows.append({QUrl(QStringLiteral("content://media/external/audio/media/") +
                       QString::number(id)),
-                 title, artist, thumbFor(ctx, id)});
+                 title, artist, thumbFor(ctx, id), album});
   }
   cursor.callMethod<void>("close", "()V");
   env.checkAndClearExceptions();
@@ -515,7 +523,8 @@ void Controller::loadCache() {
   for (const QJsonValue &v : Store::readLibrary()) {
     const QJsonObject o = v.toObject();
     m_tracks.append({QUrl(o["url"].toString()), o["title"].toString(),
-                     o["artist"].toString(), o["thumb"].toString()});
+                     o["artist"].toString(), o["thumb"].toString(),
+                     o["album"].toString()});
   }
   if (!m_tracks.isEmpty())
     emit tracksChanged();
@@ -527,7 +536,8 @@ void Controller::saveCache() const {
     arr.append(QJsonObject{{"url", t.url.toString()},
                            {"title", t.title},
                            {"artist", t.artist},
-                           {"thumb", t.thumb}});
+                           {"thumb", t.thumb},
+                           {"album", t.album}});
   Store::writeLibrary(arr);
 }
 
@@ -583,9 +593,65 @@ QVariantList Controller::tracks() const {
     list.append(QVariantMap{{QStringLiteral("uri"), t.url.toString()},
                             {QStringLiteral("title"), t.title},
                             {QStringLiteral("artist"), t.artist},
-                            {QStringLiteral("thumb"), t.thumb}});
+                            {QStringLiteral("thumb"), t.thumb},
+                            {QStringLiteral("album"), t.album}});
   return list;
 }
+
+QVariantList Controller::group(bool byAlbum) const {
+  struct G {
+    QString key, name, artist, thumb;
+    bool various = false;
+    QVariantList indices;
+    QStringList uris;
+  };
+  QList<G> groups;
+  QHash<QString, int> byKey;
+  for (int i = 0; i < m_tracks.size(); ++i) {
+    const Track &t = m_tracks[i];
+    const QString label = byAlbum ? t.album : t.artist;
+    const QString key = fold(label);
+    auto it = byKey.find(key);
+    if (it == byKey.end()) {
+      G g;
+      g.key = key;
+      g.name = label.isEmpty() ? (byAlbum ? QStringLiteral("Unknown album")
+                                          : QStringLiteral("Unknown artist"))
+                               : label;
+      g.artist = t.artist;
+      it = byKey.insert(key, int(groups.size()));
+      groups.append(g);
+    }
+    G &g = groups[it.value()];
+    if (g.thumb.isEmpty())
+      g.thumb = t.thumb;
+    if (byAlbum && !g.various && g.artist != t.artist) {
+      g.various = true;
+      g.artist = QStringLiteral("Various artists");
+    }
+    g.indices.append(i);
+    g.uris.append(t.url.toString());
+  }
+  std::stable_sort(groups.begin(), groups.end(), [](const G &a, const G &b) {
+    if (a.key.isEmpty() != b.key.isEmpty())
+      return !a.key.isEmpty();
+    return a.key < b.key;
+  });
+  QVariantList out;
+  out.reserve(groups.size());
+  for (const G &g : std::as_const(groups))
+    out.append(QVariantMap{{QStringLiteral("name"), g.name},
+                           {QStringLiteral("artist"), g.artist},
+                           {QStringLiteral("thumb"), g.thumb},
+                           {QStringLiteral("count"), int(g.indices.size())},
+                           {QStringLiteral("indices"), g.indices},
+                           {QStringLiteral("uris"), g.uris}});
+  return out;
+}
+
+QVariantList Controller::albums() const { return group(true); }
+
+QVariantList Controller::artists() const { return group(false); }
 
 void Controller::setShuffle(bool value) {
   if (m_shuffle == value)
@@ -789,7 +855,7 @@ void Controller::importLibrary() {
     for (const Row &r : queryMusicFolder())
       list.append({r.url,
                    r.title.isEmpty() ? QStringLiteral("Unknown") : r.title,
-                   r.artist, r.thumb});
+                   r.artist, r.thumb, r.album});
     QMetaObject::invokeMethod(
         this,
         [this, list] {
@@ -902,7 +968,8 @@ QVariantList Controller::queue() const {
     out.append(QVariantMap{{QStringLiteral("uri"), t.url.toString()},
                            {QStringLiteral("title"), t.title},
                            {QStringLiteral("artist"), t.artist},
-                           {QStringLiteral("thumb"), t.thumb}});
+                           {QStringLiteral("thumb"), t.thumb},
+                           {QStringLiteral("album"), t.album}});
   }
   return out;
 }

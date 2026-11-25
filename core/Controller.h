@@ -19,6 +19,8 @@ class Controller : public QObject {
   Q_PROPERTY(MediaInfo *info READ info CONSTANT)
   Q_PROPERTY(DiscordPresence *discord READ discord CONSTANT)
   Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
+  Q_PROPERTY(QVariantList albums READ albums NOTIFY tracksChanged)
+  Q_PROPERTY(QVariantList artists READ artists NOTIFY tracksChanged)
   Q_PROPERTY(int current READ current NOTIFY currentChanged)
   Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
   Q_PROPERTY(bool shuffle READ shuffle WRITE setShuffle NOTIFY shuffleChanged)
@@ -37,6 +39,8 @@ public:
   MediaInfo *info() { return &m_info; }
   DiscordPresence *discord() { return &m_discord; }
   QVariantList tracks() const;
+  QVariantList albums() const;
+  QVariantList artists() const;
   QVariantList recent() const;
   QVariantList queue() const;
   int current() const { return m_current; }
@@ -83,15 +87,12 @@ private:
   QList<Norm> m_norm;
   bool m_normDirty = true;
 
-  qint64 m_sleepFadeMs = 0;
-  float m_sleepBaseVol = 1.0f;
-  int m_sleepLastSec = -1;
-
   struct Track {
     QUrl url;
     QString title;
     QString artist;
     QString thumb;
+    QString album;
   };
 
   void importLibrary();
@@ -106,6 +107,7 @@ private:
   int queuePos() const;
   void onEnded();
   void onSleepTick();
+  QVariantList group(bool byAlbum) const;
 
   Player m_player;
   MediaInfo m_info;
@@ -124,4 +126,7 @@ private:
   qint64 m_savedPos = 0;
   QTimer m_sleepTimer;
   qint64 m_sleepEnd = 0;
+  qint64 m_sleepFadeMs = 0;
+  float m_sleepBaseVol = 1.0f;
+  int m_sleepLastSec = -1;
 };
