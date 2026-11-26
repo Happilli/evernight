@@ -154,7 +154,6 @@ Rectangle {
         visible: root.hasCover && opacity > 0
 
         Image {
-            id: prevImg
             x: -pager.width
             width: pager.width
             height: pager.height
@@ -209,7 +208,6 @@ Rectangle {
         }
 
         Image {
-            id: nextImg
             x: pager.width
             width: pager.width
             height: pager.height

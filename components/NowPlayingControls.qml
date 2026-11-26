@@ -9,6 +9,8 @@ Column {
     property bool coverMode: false
     property string trackUri: ""
     property string titleText: ""
+    property real textAlpha: 1
+    property real textShift: 0
     property string subText: ""
     property bool liked: false
     readonly property color accent: Controller.info.thumbAccent
@@ -127,21 +129,21 @@ Column {
     Column {
         width: parent.width
         spacing: 2
-        Text {
+        MorphText {
             width: parent.width
-            elide: Text.ElideRight
-            maximumLineCount: 1
             color: root.fg
             font.pixelSize: Theme.fsHeadline
             font.weight: Font.Medium
+            stiffness: 520
+            damping: 30
             text: root.titleText
         }
-        Text {
+        MorphText {
             width: parent.width
-            elide: Text.ElideRight
-            maximumLineCount: 1
             color: root.fgDim
             font.pixelSize: Theme.fsBodyLarge
+            stiffness: 620
+            damping: 36
             text: root.subText
         }
     }
