@@ -22,6 +22,8 @@ class Controller : public QObject {
   Q_PROPERTY(QVariantList albums READ albums NOTIFY tracksChanged)
   Q_PROPERTY(QVariantList artists READ artists NOTIFY tracksChanged)
   Q_PROPERTY(int current READ current NOTIFY currentChanged)
+  Q_PROPERTY(int nextIndex READ nextIndex NOTIFY neighborsChanged)
+  Q_PROPERTY(int prevIndex READ prevIndex NOTIFY neighborsChanged)
   Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
   Q_PROPERTY(bool shuffle READ shuffle WRITE setShuffle NOTIFY shuffleChanged)
   Q_PROPERTY(int repeatMode READ repeatMode WRITE setRepeatMode NOTIFY
@@ -54,6 +56,8 @@ public:
   void setShuffle(bool value);
   void setRepeatMode(int value);
   void setAutoNext(bool value);
+  int nextIndex();
+  int prevIndex();
 
   Q_INVOKABLE void playFromQueue(int pos);
   Q_INVOKABLE void playAt(int index);
@@ -77,6 +81,7 @@ signals:
   void shuffleChanged();
   void repeatModeChanged();
   void autoNextChanged();
+  void neighborsChanged();
   void sleepChanged();
 
 private:
@@ -125,6 +130,7 @@ private:
   qint64 m_pendingSeek = -1;
   qint64 m_savedPos = 0;
   QTimer m_sleepTimer;
+  int m_shufflePos = -1;
   qint64 m_sleepEnd = 0;
   qint64 m_sleepFadeMs = 0;
   float m_sleepBaseVol = 1.0f;

@@ -5,12 +5,17 @@ import Evernight
 
 Rectangle {
     id: root
+
     property real p: 0
     property bool dragging: false
     property real startP: 0
     property real lastVy: 0
     property bool blocked: false
+    property real dragX: 0
+    property int pendingDir: 0
+
     signal queueRequested
+
     readonly property int miniHeight: 76
     readonly property int miniMargin: Theme.spaceMd
     readonly property int miniBottom: 16
@@ -21,17 +26,27 @@ Rectangle {
     readonly property real dragTravel: Math.min(travel, 380)
     readonly property real controlsHeight: ctl.height > 0 ? ctl.height : 190
     readonly property real controlsTop: ph - controlsHeight - 24
+    readonly property bool expanded: p > 0.5
     readonly property var track: {
         const t = Controller.tracks;
         const c = Controller.current;
         return c >= 0 && c < t.length ? t[c] : null;
     }
+    readonly property string nextThumb: expanded ? thumbOf(Controller.tracks, Controller.nextIndex) : ""
+    readonly property string prevThumb: expanded ? thumbOf(Controller.tracks, Controller.prevIndex) : ""
     readonly property string titleText: track ? (Controller.info.title || track.title) : ""
     readonly property string subText: track ? [Controller.info.artist || track.artist, Controller.info.album].filter(function (s) {
         return s !== "";
     }).join(" \u00B7 ") : ""
     readonly property string coverUrl: track && track.thumb ? "file://" + track.thumb : ""
     readonly property bool hasCover: coverUrl !== ""
+
+    function thumbOf(list, i) {
+        if (i < 0 || i >= list.length)
+            return "";
+        const t = list[i].thumb;
+        return t ? "file://" + t : "";
+    }
     function mix(a, b) {
         return a + (b - a) * p;
     }
@@ -43,14 +58,25 @@ Rectangle {
         dragging = false;
         p = 0;
     }
+    function slide(dir) {
+        if (settle.running || p < 0.9) {
+            dir > 0 ? Controller.next() : Controller.skipPrev();
+            return;
+        }
+        pendingDir = dir;
+        settle.to = dir > 0 ? -pw : pw;
+        settle.duration = 220;
+        settle.start();
+    }
     function skip(dir) {
         if (dir > 0 && Controller.player.position > 3000)
             Controller.prev();
         else if (dir > 0)
-            Controller.skipPrev();
+            slide(-1);
         else
-            Controller.next();
+            slide(1);
     }
+
     visible: Controller.current >= 0
     clip: true
     x: mix(miniMargin, 0)
@@ -59,6 +85,7 @@ Rectangle {
     height: mix(miniHeight, ph)
     radius: mix(Theme.radiusLg, 0)
     color: Qt.tint(Theme.surfaceContainer, Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, p))
+
     Behavior on p {
         enabled: !root.dragging
         NumberAnimation {
@@ -66,12 +93,30 @@ Rectangle {
             easing.type: Theme.easeOut
         }
     }
+
+    NumberAnimation {
+        id: settle
+        target: root
+        property: "dragX"
+        easing.type: Easing.OutCubic
+        onFinished: {
+            const d = root.pendingDir;
+            root.pendingDir = 0;
+            if (d > 0)
+                Controller.next();
+            else if (d < 0)
+                Controller.skipPrev();
+            root.dragX = 0;
+        }
+    }
+
     MouseArea {
         anchors.fill: parent
         enabled: !root.blocked
         onClicked: if (root.p < 0.5)
             root.expand()
     }
+
     DragHandler {
         enabled: !root.blocked
         target: null
@@ -98,37 +143,100 @@ Rectangle {
             root.p = Math.max(0, Math.min(1, root.startP - translation.y / root.dragTravel));
         }
     }
-    Image {
-        id: cover
-        x: 0
+
+    Item {
+        id: pager
+        x: root.dragX
         y: 0
-        width: parent.width
-        height: parent.width * 1.55
-        source: root.coverUrl
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        cache: true
-        smooth: true
+        width: root.pw
+        height: root.pw * 1.55
         opacity: root.p
         visible: root.hasCover && opacity > 0
-    }
-    Rectangle {
-        width: parent.width
-        height: cover.height * 0.55
-        y: cover.height - height
-        opacity: root.p
-        visible: root.hasCover && opacity > 0
-        gradient: Gradient {
-            GradientStop {
-                position: 0.0
-                color: Qt.alpha(Theme.background, 0)
+
+        Image {
+            id: prevImg
+            x: -pager.width
+            width: pager.width
+            height: pager.height
+            source: root.prevThumb
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: true
+            visible: root.dragX > 0 && root.prevThumb !== ""
+
+            Rectangle {
+                width: parent.width
+                height: parent.height * 0.55
+                y: parent.height - height
+                gradient: Gradient {
+                    GradientStop {
+                        position: 0.0
+                        color: Qt.alpha(Theme.background, 0)
+                    }
+                    GradientStop {
+                        position: 1.0
+                        color: Theme.background
+                    }
+                }
             }
-            GradientStop {
-                position: 1.0
-                color: Theme.background
+        }
+
+        Image {
+            id: cover
+            width: pager.width
+            height: pager.height
+            source: root.coverUrl
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: true
+            smooth: true
+
+            Rectangle {
+                width: parent.width
+                height: parent.height * 0.55
+                y: parent.height - height
+                gradient: Gradient {
+                    GradientStop {
+                        position: 0.0
+                        color: Qt.alpha(Theme.background, 0)
+                    }
+                    GradientStop {
+                        position: 1.0
+                        color: Theme.background
+                    }
+                }
+            }
+        }
+
+        Image {
+            id: nextImg
+            x: pager.width
+            width: pager.width
+            height: pager.height
+            source: root.nextThumb
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: true
+            visible: root.dragX < 0 && root.nextThumb !== ""
+
+            Rectangle {
+                width: parent.width
+                height: parent.height * 0.55
+                y: parent.height - height
+                gradient: Gradient {
+                    GradientStop {
+                        position: 0.0
+                        color: Qt.alpha(Theme.background, 0)
+                    }
+                    GradientStop {
+                        position: 1.0
+                        color: Theme.background
+                    }
+                }
             }
         }
     }
+
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
         y: root.controlsTop / 2 - height / 2
@@ -138,6 +246,37 @@ Rectangle {
         opacity: root.p
         visible: !root.hasCover && opacity > 0
     }
+
+    Item {
+        x: 0
+        y: 0
+        width: root.pw
+        height: root.ph
+        enabled: root.p > 0.9 && !settle.running
+
+        DragHandler {
+            target: null
+            yAxis.enabled: false
+            onActiveChanged: {
+                if (active) {
+                    settle.stop();
+                    return;
+                }
+                const far = Math.abs(root.dragX) > root.pw * 0.3 || Math.abs(centroid.velocity.x) > 800;
+                const dir = far && root.dragX !== 0 ? (root.dragX < 0 ? 1 : -1) : 0;
+                const to = dir === 0 ? 0 : (dir > 0 ? -root.pw : root.pw);
+                root.pendingDir = dir;
+                settle.to = to;
+                settle.duration = Math.max(120, Math.min(260, Math.abs(to - root.dragX) * 0.45));
+                settle.start();
+            }
+            onTranslationChanged: {
+                if (active)
+                    root.dragX = translation.x;
+            }
+        }
+    }
+
     Text {
         id: title
         width: root.pw - 184
@@ -152,6 +291,7 @@ Rectangle {
         opacity: Math.max(0, 1 - root.p * 3)
         visible: opacity > 0
     }
+
     Text {
         width: title.width
         x: title.x
@@ -164,6 +304,7 @@ Rectangle {
         opacity: title.opacity
         visible: opacity > 0
     }
+
     Row {
         id: miniControls
         anchors.right: parent.right
@@ -173,6 +314,7 @@ Rectangle {
         opacity: Math.max(0, 1 - root.p * 3)
         visible: opacity > 0
         enabled: root.p < 0.3
+
         MaterialIconButton {
             type: MaterialIconButton.Tonal
             sizeStyle: MaterialIconButton.Small
@@ -181,6 +323,7 @@ Rectangle {
             iconSource: "../icons/prev.svg"
             onClicked: Controller.prev()
         }
+
         MaterialIconButton {
             type: MaterialIconButton.Filled
             sizeStyle: MaterialIconButton.Small
@@ -189,6 +332,7 @@ Rectangle {
             iconSource: Controller.playing ? "../icons/pause.svg" : "../icons/play.svg"
             onClicked: Controller.toggle()
         }
+
         MaterialIconButton {
             type: MaterialIconButton.Tonal
             sizeStyle: MaterialIconButton.Small
@@ -198,6 +342,7 @@ Rectangle {
             onClicked: Controller.next()
         }
     }
+
     Rectangle {
         x: 18
         y: root.miniHeight - 11
@@ -207,6 +352,7 @@ Rectangle {
         color: Theme.surfaceContainerHighest
         opacity: Math.max(0, 1 - root.p * 3)
         visible: opacity > 0
+
         Rectangle {
             height: parent.height
             radius: parent.radius
@@ -214,6 +360,7 @@ Rectangle {
             width: Controller.player.duration > 0 ? parent.width * Math.min(1, Controller.player.position / Controller.player.duration) : 0
         }
     }
+
     NowPlayingActions {
         x: root.pw - root.sideMargin - width + 8
         y: root.controlsTop - height - 8
@@ -222,6 +369,7 @@ Rectangle {
         visible: opacity > 0
         enabled: root.p > 0.6
     }
+
     Loader {
         id: ctl
         x: root.sideMargin
@@ -232,6 +380,7 @@ Rectangle {
         opacity: Math.max(0, root.p * 2 - 1)
         visible: opacity > 0
         enabled: root.p > 0.6
+
         sourceComponent: NowPlayingControls {
             pw: root.pw
             sideMargin: root.sideMargin

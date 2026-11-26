@@ -447,6 +447,14 @@ Controller::Controller(QObject *parent) : QObject(parent) {
   connect(&m_player, &Player::metaDataChanged, this, push);
   connect(&m_player, &Player::stateChanged, this, push);
   connect(this, &Controller::currentChanged, this, push);
+  connect(this, &Controller::queueChanged, this, [this] {
+    m_shufflePos = -1;
+    emit neighborsChanged();
+  });
+  connect(this, &Controller::shuffleChanged, this,
+          &Controller::neighborsChanged);
+  connect(this, &Controller::tracksChanged, this,
+          &Controller::neighborsChanged);
   connect(&m_player, &Player::positionChanged, this,
           [this, push, last = qint64(0)]() mutable {
             const qint64 p = m_player.position();
@@ -742,7 +750,9 @@ void Controller::play(int index) {
   }
   m_pendingSeek = -1;
   m_current = index;
+  m_shufflePos = -1;
   emit currentChanged();
+  emit neighborsChanged();
   m_player.play();
   const QString u = m_tracks[index].url.toString();
   QTimer::singleShot(400, this, [this, u] {
@@ -797,19 +807,36 @@ void Controller::toggle() {
     m_player.play();
 }
 
-void Controller::next() {
+int Controller::nextIndex() {
   const int n = queueSize();
   if (n == 0)
-    return;
+    return -1;
   const int pos = queuePos();
   if (m_shuffle && n > 1) {
-    int r = pos;
-    while (r == pos)
-      r = QRandomGenerator::global()->bounded(n);
-    play(queueAt(r));
-  } else {
-    play(queueAt((pos + 1) % n));
+    if (m_shufflePos < 0 || m_shufflePos >= n || m_shufflePos == pos) {
+      int r = pos;
+      while (r == pos)
+        r = QRandomGenerator::global()->bounded(n);
+      m_shufflePos = r;
+    }
+    return queueAt(m_shufflePos);
   }
+  return queueAt((pos + 1) % n);
+}
+
+int Controller::prevIndex() {
+  const int n = queueSize();
+  if (n == 0)
+    return -1;
+  const int pos = queuePos();
+  return queueAt(pos < 0 ? 0 : (pos - 1 + n) % n);
+}
+
+void Controller::next() {
+  const int t = nextIndex();
+  m_shufflePos = -1;
+  if (t >= 0)
+    play(t);
 }
 
 void Controller::skipPrev() {
