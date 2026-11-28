@@ -3,11 +3,13 @@
 #include <QFontMetricsF>
 #include <QMetaObject>
 #include <QPainter>
+#include <QPainterPath>
 #include <QStringList>
 #include <algorithm>
 #include <cmath>
 
 namespace {
+constexpr qreal kThumb = 48.0;
 constexpr qreal kPad = 8.0;
 constexpr qreal kRowPad = 16.0;
 constexpr qreal kIcon = 24.0;
@@ -32,7 +34,14 @@ MaterialSearchView::MaterialSearchView(QQuickItem *parent)
 qreal MaterialSearchView::viewport() const {
   if (m_items.isEmpty())
     return 0.0;
+  if (m_fill)
+    return std::max(0.0, height() - 2.0 * kPad);
   return std::min<int>(m_items.size(), m_maxVisible) * m_itemH;
+}
+
+void MaterialSearchView::setFillHeight(bool v) {
+  if (assign(m_fill, v, &MaterialSearchView::fillHeightChanged))
+    structureChanged();
 }
 
 qreal MaterialSearchView::contentHeight() const {
@@ -168,6 +177,7 @@ void MaterialSearchView::setModel(const QVariantList &v) {
     } else {
       const QVariantMap m = it.toMap();
       e.headline = m.value("headline").toString();
+      e.thumb = m.value("thumb").toString();
       e.supporting = m.value("supporting").toString();
       e.trailingText = m.value("trailingText").toString();
       e.leadingIcon = m.value("leadingIcon").toString();
@@ -317,6 +327,23 @@ void MaterialSearchView::mouseUngrabEvent() {
   m_pressIndex = -1;
   update();
 }
+QImage MaterialSearchView::thumbFor(const QString &path, qreal dpr) {
+  const QString k = path + QLatin1Char('|') + QString::number(dpr);
+  const auto it = m_thumbs.constFind(k);
+  if (it != m_thumbs.constEnd())
+    return *it;
+  QImage src(path);
+  if (!src.isNull()) {
+    const int px = int(std::ceil(kThumb * dpr));
+    src = src.scaled(px, px, Qt::KeepAspectRatioByExpanding,
+                     Qt::SmoothTransformation);
+    src = src.copy((src.width() - px) / 2, (src.height() - px) / 2, px, px);
+  }
+  if (m_thumbs.size() > 200)
+    m_thumbs.clear();
+  m_thumbs.insert(k, src);
+  return src;
+}
 
 void MaterialSearchView::build(Kit::Mesh &m) {
   const qreal w = width(), h = height();
@@ -335,7 +362,8 @@ void MaterialSearchView::build(Kit::Mesh &m) {
 
   if (m_items.isEmpty()) {
     const qreal tw = QFontMetricsF(supF).horizontalAdvance(m_emptyText);
-    textLayer(0, supF, m_emptyText, m_supportingColor, (w - tw) / 2.0, h / 2.0);
+    textLayer(0, supF, m_emptyText, m_supportingColor, (w - tw) / 2.0,
+              m_fill ? kPad + kEmptyH / 2.0 : h / 2.0);
     return;
   }
 
@@ -378,6 +406,7 @@ void MaterialSearchView::build(Kit::Mesh &m) {
                                     e.supporting,
                                     e.trailingText,
                                     e.leadingIcon,
+                                    e.thumb,
                                     e.enabled ? "1" : "0",
                                     QString::number(rw),
                                     QString::number(rh),
@@ -403,6 +432,20 @@ void MaterialSearchView::build(Kit::Mesh &m) {
       const qreal cy = m_itemH / 2.0;
       qreal xl = kRowPad;
       qreal xr = rw - kRowPad;
+      if (!e.thumb.isEmpty()) {
+        const QImage th = thumbFor(e.thumb, dpr);
+        const QRectF tr(xl, cy - kThumb / 2.0, kThumb, kThumb);
+        QPainterPath clip;
+        clip.addRoundedRect(tr, 8.0, 8.0);
+        p.save();
+        p.setClipPath(clip, Qt::IntersectClip);
+        if (th.isNull())
+          p.fillRect(tr, Kit::withAlpha(m_supportingColor, 0.15));
+        else
+          p.drawImage(tr, th);
+        p.restore();
+        xl += kThumb + kGap;
+      }
 
       if (!e.leadingIcon.isEmpty()) {
         Kit::drawGlyph(&p, m_iconFont, e.leadingIcon,

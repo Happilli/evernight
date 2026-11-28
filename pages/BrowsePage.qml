@@ -6,6 +6,7 @@ import Evernight
 FadePage {
     id: page
     signal openRequested(string kind, string name)
+    signal searchRequested(Item anchor)
     signal songLongPressed(string uri, string title, string artist, string playlistId)
     readonly property bool isCurrent: ListView.isCurrentItem
     property int mode: {
@@ -40,6 +41,18 @@ FadePage {
             color: Theme.onSurfaceColor
             font.pixelSize: Theme.fsTitle
             font.weight: Font.Medium
+        }
+        MaterialIconButton {
+            id: searchBtn
+            anchors.right: filterBtn.left
+            anchors.verticalCenter: parent.verticalCenter
+            type: MaterialIconButton.Standard
+            sizeStyle: MaterialIconButton.Small
+            iconSize: 24
+            iconSource: "../icons/search.svg"
+            color: "transparent"
+            iconColor: Theme.onSurfaceColor
+            onClicked: page.searchRequested(searchBtn)
         }
         MaterialIconButton {
             id: filterBtn

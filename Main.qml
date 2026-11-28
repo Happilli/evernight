@@ -15,6 +15,8 @@ Window {
     property string groupName: ""
     readonly property real playerInset: np.visible ? np.miniHeight + np.miniBottom + Theme.spaceMd : 0
     function handleBack() {
+        if (searchOverlay.handleBack())
+            return true;
         if (queueSheet.open) {
             queueSheet.open = false;
             return true;
@@ -96,6 +98,7 @@ Window {
             }
             BrowsePage {
                 id: browsePage
+                onSearchRequested: anchor => searchOverlay.openFrom(anchor)
                 onOpenRequested: (kind, name) => {
                     root.groupKind = kind;
                     root.groupName = name;
@@ -181,6 +184,10 @@ Window {
     Item {
         id: overlayLayer
         anchors.fill: parent
+        SearchOverlay {
+            id: searchOverlay
+            anchors.fill: parent
+        }
         SongSheet {
             id: songSheet
             anchors.fill: parent

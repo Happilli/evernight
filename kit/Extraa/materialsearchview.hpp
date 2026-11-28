@@ -2,6 +2,8 @@
 #include "../Core/sgitem.hpp"
 #include <QColor>
 #include <QFont>
+#include <QHash>
+#include <QImage>
 #include <QMouseEvent>
 #include <QString>
 #include <QVariant>
@@ -42,6 +44,8 @@ class MaterialSearchView : public SgMaterialItem {
                  NOTIFY highlightColorChanged)
   Q_PROPERTY(QColor borderColor READ borderColor WRITE setBorderColor NOTIFY
                  borderColorChanged)
+  Q_PROPERTY(bool fillHeight READ fillHeight WRITE setFillHeight NOTIFY
+                 fillHeightChanged)
 
 public:
   explicit MaterialSearchView(QQuickItem *parent = nullptr);
@@ -65,7 +69,9 @@ public:
   QColor iconColor() const { return m_iconColor; }
   QColor highlightColor() const { return m_highlightColor; }
   QColor borderColor() const { return m_borderColor; }
+  bool fillHeight() const { return m_fill; }
 
+  void setFillHeight(bool v);
   void setModel(const QVariantList &v);
   void setOpen(bool v);
   void setCurrentIndex(int i);
@@ -88,6 +94,7 @@ public:
   Q_INVOKABLE void close() { setOpen(false); }
 
 signals:
+  void fillHeightChanged();
   void modelChanged();
   void openChanged();
   void currentIndexChanged();
@@ -121,6 +128,7 @@ protected:
 
 private:
   struct Entry {
+    QString thumb;
     QString headline;
     QString supporting;
     QString trailingText;
@@ -128,6 +136,8 @@ private:
     bool enabled = true;
   };
 
+  QImage thumbFor(const QString &path, qreal dpr);
+  QHash<QString, QImage> m_thumbs;
   qreal viewport() const;
   qreal maxScroll() const;
   bool selectable(int i) const;
@@ -139,6 +149,7 @@ private:
   void applyPop();
   void trigger(int i);
 
+  bool m_fill = false;
   QVariantList m_raw;
   QVector<Entry> m_items;
   bool m_open = false;
